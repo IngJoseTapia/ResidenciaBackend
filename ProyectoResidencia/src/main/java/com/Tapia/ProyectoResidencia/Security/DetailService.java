@@ -22,10 +22,16 @@ public class DetailService implements UserDetailsService {
         Usuario usuario = usuarioRepository.findByCorreo(correo)
                 .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado con correo: " + correo));
 
+        // Si el usuario se registró con Google y no tiene contraseña, usamos una vacía
+        String password = usuario.getContrasena();
+        if (password == null) {
+            password = ""; // o passwordEncoder.encode("") si tu PasswordEncoder lo requiere
+        }
+
         return User.builder()
                 .username(usuario.getCorreo())
-                .password(usuario.getContrasena())
-                .roles(usuario.getRol().name()) // Spring Security automáticamente agrega el prefijo "ROLE_"
+                .password(password)
+                .roles(usuario.getRol().name()) // Spring Security agrega automáticamente "ROLE_"
                 .build();
     }
 }

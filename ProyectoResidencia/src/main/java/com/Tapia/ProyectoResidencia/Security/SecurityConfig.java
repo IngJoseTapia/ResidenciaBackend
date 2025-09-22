@@ -21,10 +21,14 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final CustomOAuth2SuccessHandler customOAuth2SuccessHandler;
+
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
+                          CustomOAuth2SuccessHandler customOAuth2SuccessHandler) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.customOAuth2SuccessHandler = customOAuth2SuccessHandler;
     }
 
     @Bean
@@ -33,19 +37,17 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/**").permitAll() // login, register
+                        .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/user/**").hasAnyRole("VOCAL", "CAE", "SE", "USER")
                         .anyRequest().authenticated()
                 )
-                .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // 🔹 Permitir login con Google
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(new JwtAuthenticationEntryPoint())) // ⬅️ aquí
                 .oauth2Login(oauth2 -> oauth2
-                        .loginPage("/auth/login") // opcional: tu endpoint de login
-                        .defaultSuccessUrl("/auth/google-success", true) // a dónde redirigir tras login
+                        // 🔹 quita el loginPage
+                        .successHandler(customOAuth2SuccessHandler)
                         .failureUrl("/auth/google-failure")
                 )
-                // 🔹 Mantener tu JWT para las demás peticiones
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

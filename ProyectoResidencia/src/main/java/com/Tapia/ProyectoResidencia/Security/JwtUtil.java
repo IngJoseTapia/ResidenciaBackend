@@ -68,6 +68,14 @@ public class JwtUtil {
         return (username.equals(extractUsername(token)) && !isTokenExpired(token));
     }
 
+    public boolean isRefreshTokenValid(String token, String username) {
+        try {
+            return username.equals(extractUsername(token)) && !isTokenExpired(token);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private boolean isTokenExpired(String token) {
         return extractClaims(token).getExpiration().before(new Date());
     }

@@ -6,7 +6,9 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 @Data
 @Entity
@@ -16,32 +18,27 @@ public class Usuario {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id; //Id del usuario
 
-    @NotNull(message = "El correo es obligatorio")
     @NotBlank(message = "El correo es obligatorio")
     @Email(message = "El correo debe tener un formato válido")
     @Column(unique = true, nullable = false, length = 100)
     private String correo; //Correo del usuario con el que iniciará sesión
 
-    @NotNull(message = "La contraseña es obligatoria")
     @NotBlank(message = "La contraseña es obligatoria")
     @Size(min = 8, message = "La contraseña debe tener al menos 8 caracteres")
     @Pattern(
-            regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$",
-            message = "La contraseña debe contener al menos una mayúscula, una minúscula, un número y un carácter especial (@$!%*?&)"
+            regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z\\d]).{8,}$",
+            message = "La contraseña debe contener al menos una mayúscula, una minúscula, un número y un carácter especial"
     )
     private String contrasena; // Contraseña del usuario
 
-    @NotNull(message = "El nombre es obligatorio")
     @NotBlank(message = "El nombre es obligatorio")
     @Size(max = 50, message = "El nombre no puede tener más de 50 caracteres")
     private String nombre; //Nombre completo del usuario
 
-    @NotNull(message = "El apellido paterno es obligatorio")
     @NotBlank(message = "El apellido paterno es obligatorio")
     @Size(max = 50, message = "El apellido paterno no puede tener más de 50 caracteres")
     private String apellidoPaterno; //Apellido paterno del usuario
 
-    @NotNull(message = "El apellido materno es obligatorio")
     @NotBlank(message = "El apellido materno es obligatorio")
     @Size(max = 50, message = "El apellido materno no puede tener más de 50 caracteres")
     private String apellidoMaterno; //Apellido materno del usuario
@@ -68,4 +65,7 @@ public class Usuario {
 
     private int intentosFallidos; //Contador de intentos de acceso con contraseña incorrecta o cuenta no registrada
     private Date cuentaBloqueadaHasta; // null si no está bloqueado
+
+    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<PasswordResetToken> passwordResetTokens = new ArrayList<>();
 }

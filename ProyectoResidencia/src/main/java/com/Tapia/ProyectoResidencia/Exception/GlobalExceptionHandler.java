@@ -1,5 +1,8 @@
 package com.Tapia.ProyectoResidencia.Exception;
 
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import org.springframework.context.support.DefaultMessageSourceResolvable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -8,64 +11,129 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.util.NoSuchElementException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
+
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // 400 - Bad Request (ej. validaciones)
+    private static final Logger logger = Logger.getLogger(GlobalExceptionHandler.class.getName());
+
+    /**
+     * Maneja errores de validación en DTOs (@Valid en RequestBody).
+     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationErrors(MethodArgumentNotValidException ex) {
-        String mensaje = ex.getBindingResult().getAllErrors().get(0).getDefaultMessage();
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
+        String mensaje = ex.getBindingResult().getAllErrors()
+                .stream()
+                .map(DefaultMessageSourceResolvable::getDefaultMessage)
+                .collect(Collectors.joining("; "));
+
+        logger.log(Level.WARNING, "Error de validación en DTO: {0}", mensaje);
+
+        return ResponseEntity.badRequest()
                 .body(new ErrorResponse(mensaje, HttpStatus.BAD_REQUEST.value()));
     }
 
-    // 400 - Bad Request (errores genéricos lanzados manualmente)
+    /**
+     * Maneja errores de validación en entidades (ConstraintViolation en JPA/Hibernate).
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException ex) {
+        String mensaje = ex.getConstraintViolations()
+                .stream()
+                .map(ConstraintViolation::getMessage)
+                .collect(Collectors.joining("; "));
+
+        logger.log(Level.WARNING, "Error de validación en entidad: {0}", mensaje);
+
+        return ResponseEntity.badRequest()
+                .body(new ErrorResponse(mensaje, HttpStatus.BAD_REQUEST.value()));
+    }
+
+    /**
+     * Maneja reglas de negocio incumplidas (validaciones manuales).
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
+        logger.log(Level.WARNING, "Regla de negocio incumplida: {0}", ex.getMessage());
+
+        return ResponseEntity.badRequest()
                 .body(new ErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST.value()));
     }
 
-    // 401 - Unauthorized (credenciales incorrectas)
+    /**
+     * Maneja credenciales inválidas en login.
+     */
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex) {
-        return ResponseEntity
-                .status(HttpStatus.UNAUTHORIZED)
+        logger.log(Level.WARNING, "Credenciales inválidas: {0}", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ErrorResponse("Credenciales inválidas", HttpStatus.UNAUTHORIZED.value()));
     }
 
-    // 401 - Unauthorized (ej. token inválido o expirado)
+    /**
+     * Maneja tokens inválidos o expirados.
+     */
     @ExceptionHandler(SecurityException.class)
     public ResponseEntity<ErrorResponse> handleSecurity(SecurityException ex) {
-        return ResponseEntity
-                .status(HttpStatus.UNAUTHORIZED)
+        logger.log(Level.WARNING, "Token inválido/expirado: {0}", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ErrorResponse(ex.getMessage(), HttpStatus.UNAUTHORIZED.value()));
     }
 
-    // 403 - Forbidden (sin permisos suficientes)
+    /**
+     * Maneja accesos denegados por falta de permisos.
+     */
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
-        return ResponseEntity
-                .status(HttpStatus.FORBIDDEN)
+        logger.log(Level.WARNING, "Acceso denegado: {0}", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ErrorResponse("Acceso denegado", HttpStatus.FORBIDDEN.value()));
     }
 
-    // 404 - Not Found
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<ErrorResponse> handleRuntime(RuntimeException ex) {
-        return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
+    /**
+     * Maneja entidades no encontradas (ej: usuario inexistente).
+     */
+    @ExceptionHandler(NoSuchElementException.class)
+    public ResponseEntity<ErrorResponse> handleNotFound(NoSuchElementException ex) {
+        logger.log(Level.INFO, "Recurso no encontrado: {0}", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(new ErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND.value()));
     }
 
-    // 500 - Internal Server Error (errores inesperados)
+    /**
+     * Maneja cualquier RuntimeException no controlada.
+     */
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<ErrorResponse> handleRuntime(RuntimeException ex) {
+        logger.log(Level.SEVERE, "Error en tiempo de ejecución: " + ex.getMessage(), ex);
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponse("Error inesperado en el servidor", HttpStatus.INTERNAL_SERVER_ERROR.value()));
+    }
+
+    /**
+     * Maneja cualquier excepción genérica no contemplada.
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneral(Exception ex) {
-        ex.printStackTrace(); // Para que siempre lo veas en la consola
-        return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+        logger.log(Level.SEVERE, "Error no controlado: " + ex.getMessage(), ex);
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorResponse("Error interno en el servidor", HttpStatus.INTERNAL_SERVER_ERROR.value()));
+    }
+
+    @ExceptionHandler(BloqueoException.class)
+    public ResponseEntity<ErrorResponse> handleBloqueo(BloqueoException ex) {
+        logger.log(Level.WARNING, "Bloqueo detectado: {0}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN) // o 429 si quieres
+                .body(new ErrorResponse(ex.getMessage(), HttpStatus.FORBIDDEN.value()));
     }
 }

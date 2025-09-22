@@ -57,4 +57,12 @@ public class NotificacionService {
             mailSender.send(mensaje);
         }
     }
+
+    public void enviarCorreo(String destinatario, String asunto, String cuerpo) {
+        SimpleMailMessage mensaje = new SimpleMailMessage();
+        mensaje.setTo(destinatario);
+        mensaje.setSubject(asunto);
+        mensaje.setText(cuerpo);
+        mailSender.send(mensaje);
+    }
 }

@@ -1,5 +1,6 @@
 package com.Tapia.ProyectoResidencia.Model;
 
+import com.Tapia.ProyectoResidencia.Enum.Evento;
 import com.Tapia.ProyectoResidencia.Enum.Rol;
 import com.Tapia.ProyectoResidencia.Enum.Sitio;
 import jakarta.persistence.*;
@@ -33,4 +34,6 @@ public class Login {
     private String descripcion; //Alguna posible anotación extra
 
     private String ip;//Ip de origen desde donde se esta realizando la accion (esto es opcional, si es posible recuperar la ip)
+
+    @Enumerated(EnumType.STRING) @Column(nullable = false) private Evento tipoEvento; //Para poder identificar que tipo de evento se ejecutó
 }

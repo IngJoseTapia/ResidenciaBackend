@@ -3,14 +3,16 @@ package com.Tapia.ProyectoResidencia.Service;
 import com.Tapia.ProyectoResidencia.DTO.LoginRequest;
 import com.Tapia.ProyectoResidencia.DTO.RegisterRequest;
 import com.Tapia.ProyectoResidencia.DTO.AuthResponse;
+import com.Tapia.ProyectoResidencia.Enum.Evento;
 import com.Tapia.ProyectoResidencia.Enum.Rol;
 import com.Tapia.ProyectoResidencia.Enum.Sitio;
 import com.Tapia.ProyectoResidencia.Enum.Status;
-import com.Tapia.ProyectoResidencia.Model.IpBlock;
+import com.Tapia.ProyectoResidencia.Exception.BloqueoException;
 import com.Tapia.ProyectoResidencia.Model.Login;
+import com.Tapia.ProyectoResidencia.Model.PasswordResetToken;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
-import com.Tapia.ProyectoResidencia.Repository.IpBlockRepository;
 import com.Tapia.ProyectoResidencia.Repository.LoginRepository;
+import com.Tapia.ProyectoResidencia.Repository.PasswordResetTokenRepository;
 import com.Tapia.ProyectoResidencia.Repository.UsuarioRepository;
 import com.Tapia.ProyectoResidencia.Security.JwtUtil;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -18,7 +20,9 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -28,95 +32,45 @@ public class AuthService {
 
     private final UsuarioRepository usuarioRepository;
     private final LoginRepository loginRepository;
-    private final IpBlockRepository ipBlockRepository;
+    private final PasswordResetTokenRepository tokenRepository;
     private final NotificacionService notificacionService;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtUtil jwtUtil;
+    private final LoginAttemptService loginAttemptService;
+    private final PasswordResetAttemptService passwordResetAttemptService;
 
     public AuthService(UsuarioRepository usuarioRepository,
                        LoginRepository loginRepository,
-                       IpBlockRepository ipBlockRepository,
+                       PasswordResetTokenRepository tokenRepository,
                        NotificacionService notificacionService,
                        PasswordEncoder passwordEncoder,
                        AuthenticationManager authenticationManager,
-                       JwtUtil jwtUtil) {
+                       JwtUtil jwtUtil,
+                       LoginAttemptService loginAttemptService,
+                       PasswordResetAttemptService passwordResetAttemptService) {
         this.usuarioRepository = usuarioRepository;
         this.loginRepository = loginRepository;
-        this.ipBlockRepository = ipBlockRepository;
+        this.tokenRepository = tokenRepository;
         this.notificacionService = notificacionService;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.jwtUtil = jwtUtil;
+        this.loginAttemptService = loginAttemptService;
+        this.passwordResetAttemptService = passwordResetAttemptService;
     }
 
     public String register(RegisterRequest request) {
-        if (request.email() == null || request.email().isBlank()) {
-            throw new IllegalArgumentException("El correo es obligatorio");
-        }
-        if (request.password() == null || request.password().isBlank()) {
-            throw new IllegalArgumentException("La contraseña es obligatoria");
-        }
-        if (request.confirmPassword() == null || request.confirmPassword().isBlank()) {
-            throw new IllegalArgumentException("Confirmar contraseña es obligatorio");
-        }
-        if (request.nombre() == null || request.nombre().isBlank()) {
-            throw new IllegalArgumentException("El nombre es obligatorio");
-        }
-        if (request.apellidoPaterno() == null || request.apellidoPaterno().isBlank()) {
-            throw new IllegalArgumentException("El apellido paterno es obligatorio");
-        }
-        if (request.apellidoMaterno() == null || request.apellidoMaterno().isBlank()) {
-            throw new IllegalArgumentException("El apellido materno es obligatorio");
-        }
-        if (request.telefono() == null || request.telefono().isBlank()) {
-            throw new IllegalArgumentException("El telefono es obligatorio");
-        }
-        if (request.genero() == null || request.genero().isBlank()) {
-            throw new IllegalArgumentException("El genero es obligatorio");
+        // 1. Validaciones de negocio mínimas
+        if (!request.password().equals(request.confirmPassword())) {
+            throw new IllegalArgumentException("Las contraseñas no coinciden");
         }
 
         if (usuarioRepository.existsByCorreo(request.email())) {
             throw new IllegalArgumentException("El correo ya está registrado");
         }
 
-        String emailRegex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$";
-        if (!request.email().matches(emailRegex)) {
-            throw new IllegalArgumentException("El correo no tiene un formato válido");
-        }
-
-
-        // Validar que la contraseña y confirmPassword coincidan
-        if (!request.password().equals(request.confirmPassword())) {
-            throw new IllegalArgumentException("Las contraseñas no coinciden");
-        }
-
-        // Validación de la contraseña según tu patrón (puedes usar regex o BCrypt)
-        String regex = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$";
-        if (!request.password().matches(regex)) {
-            throw new IllegalArgumentException("La contraseña debe contener al menos una mayúscula, una minúscula, un número y un carácter especial (@$!%*?&)");
-        }
-
-        String nombreRegex = "^[A-Za-zÀ-ÿ\\s]+$";
-        if (!request.nombre().matches(nombreRegex)) {
-            throw new IllegalArgumentException("El nombre contiene caracteres inválidos");
-        }
-        if (!request.apellidoPaterno().matches(nombreRegex)) {
-            throw new IllegalArgumentException("El apellido paterno contiene caracteres inválidos");
-        }
-        if (!request.apellidoMaterno().matches(nombreRegex)) {
-            throw new IllegalArgumentException("El apellido materno contiene caracteres inválidos");
-        }
-
-        if (!List.of("Masculino", "Femenino", "Otro").contains(request.genero())) {
-            throw new IllegalArgumentException("El género debe ser Masculino, Femenino u Otro");
-        }
-
-        if (!request.telefono().matches("^[0-9]{10}$")) {
-            throw new IllegalArgumentException("El teléfono debe tener exactamente 10 dígitos");
-        }
-
-
+        // 2. Mapear DTO a entidad Usuario
         Usuario usuario = new Usuario();
         usuario.setCorreo(request.email());
         usuario.setContrasena(passwordEncoder.encode(request.password()));
@@ -131,155 +85,154 @@ public class AuthService {
         usuario.setIntentosFallidos(0);
         usuario.setCuentaBloqueadaHasta(null);
 
+        // 3. Guardar en la base de datos
+        // Si algún campo viola las validaciones del modelo, Hibernate lanzará ConstraintViolationException
         usuarioRepository.save(usuario);
+
+        // Registrar log de registro (opcional)
+        registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(), Sitio.WEB,
+                "Éxito", "Usuario registrado", Evento.USER_REGISTRADO, null);
+
         return "Usuario registrado correctamente. Espera la aprobación de un administrador.";
     }
 
     public AuthResponse login(LoginRequest request, Sitio sitio, String ip) {
+        Usuario usuario = null;
         Login loginLog = new Login();
         loginLog.setCorreo(request.email());
         loginLog.setFechaActividad(new Date());
         loginLog.setSitio(sitio);
         loginLog.setIp(ip);
 
-        // 0. Validar si la IP ya está bloqueada
-        Optional<IpBlock> ipBlockOpt = ipBlockRepository.findByIp(ip);
-        if (ipBlockOpt.isPresent()) {
-            IpBlock ipBlock = ipBlockOpt.get();
-            if (ipBlock.getBloqueadaHasta() != null && ipBlock.getBloqueadaHasta().after(new Date())) {
-                loginLog.setResultado("Fallo");
-                loginLog.setDescripcion("IP bloqueada temporalmente por múltiples intentos fallidos");
-                loginLog.setRol(Rol.DESCONOCIDO);
-                loginRepository.save(loginLog);
-                throw new RuntimeException("La IP está bloqueada. Intente más tarde.");
-            } else if (ipBlock.getBloqueadaHasta() != null && ipBlock.getBloqueadaHasta().before(new Date())) {
-                // El bloqueo ya expiró → resetear
-                ipBlock.setIntentosFallidos(0);
-                ipBlock.setBloqueadaHasta(null);
-                ipBlockRepository.save(ipBlock);
-            }
-        }
-
-        // 1. Verificar si el correo existe en la BD
-        Optional<Usuario> usuarioOpt = usuarioRepository.findByCorreo(request.email());
-        if (usuarioOpt.isEmpty()) {
-            // Incrementar contador por IP
-            registrarIntentoFallidoIp(ip);
-
-            loginLog.setIdUsuario(null);
-            loginLog.setRol(Rol.DESCONOCIDO);
-            loginLog.setResultado("Fallo");
-            loginLog.setDescripcion("Inicio de sesión fallido: el correo no está registrado en el sistema");
-            loginRepository.save(loginLog);
-
-            throw new NoSuchElementException("El correo no está registrado");
-        }
-
-        Usuario usuario = usuarioOpt.get();
-        loginLog.setIdUsuario(usuario.getId());
-        loginLog.setRol(usuario.getRol());
-
-        // 2. Validar si el usuario está bloqueado
-        if (usuario.getCuentaBloqueadaHasta() != null) {
-            if (usuario.getCuentaBloqueadaHasta().after(new Date())) {
-                // Todavía está en el periodo de bloqueo
-                loginLog.setResultado("Fallo");
-                loginLog.setDescripcion("Cuenta bloqueada temporalmente por múltiples intentos fallidos");
-                loginRepository.save(loginLog);
-                throw new RuntimeException("La cuenta está bloqueada. Intente más tarde.");
-            } else {
-                // El tiempo de bloqueo ya expiró → desbloquear
-                usuario.setCuentaBloqueadaHasta(null);
-                usuario.setIntentosFallidos(0);
-                usuarioRepository.save(usuario);
-            }
-        }
-
         try {
-            // 3. Validar credenciales
+            // 0. Revisar bloqueo por IP
+            if (loginAttemptService.estaIpBloqueada(ip)) {
+                registrarLog(request.email(), null, Rol.DESCONOCIDO, sitio,
+                        "Fallo", "IP bloqueada temporalmente por múltiples intentos fallidos",
+                        Evento.LOGIN_FALLIDO, ip);
+                throw new BloqueoException("La IP está bloqueada. Intente más tarde.");
+            }
+
+            // 1. Verificar si el correo existe en la BD
+            Optional<Usuario> usuarioOpt = usuarioRepository.findByCorreo(request.email());
+            if (usuarioOpt.isEmpty()) {
+                // incrementar contador por IP
+                loginAttemptService.registrarIntentoFallidoIp(ip);
+
+                registrarLog(request.email(), null, Rol.DESCONOCIDO, sitio,
+                        "Fallo", "Inicio de sesión fallido: correo no registrado",
+                        Evento.LOGIN_FALLIDO, ip);
+                throw new NoSuchElementException("El correo no está registrado");
+            }
+
+            usuario = usuarioOpt.get();
+            loginLog.setIdUsuario(usuario.getId());
+            loginLog.setRol(usuario.getRol());
+
+            // 2. Revisar bloqueo por cuenta
+            if (loginAttemptService.estaCuentaBloqueada(usuario)) {
+                registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(), sitio,
+                        "Fallo", "Cuenta bloqueada temporalmente por múltiples intentos fallidos",
+                        Evento.LOGIN_FALLIDO, ip);
+                throw new BloqueoException("La cuenta está bloqueada. Intente más tarde.");
+            } else {
+                // Si había bloqueo expirado, limpiar
+                if (usuario.getCuentaBloqueadaHasta() != null && usuario.getCuentaBloqueadaHasta().before(new Date())) {
+                    loginAttemptService.limpiarIntentosUsuario(usuario);
+                }
+            }
+
+            // 3. Autenticar (puede lanzar BadCredentialsException)
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.email(), request.password())
             );
 
-            // Resetear intentos fallidos al iniciar sesión correctamente
-            usuario.setIntentosFallidos(0);
-            usuario.setCuentaBloqueadaHasta(null);
-            usuarioRepository.save(usuario);
+            // 4. Login exitoso: resetear contadores y generar tokens
+            loginAttemptService.limpiarIntentosUsuario(usuario);
+            loginAttemptService.limpiarIntentosIp(ip);
 
-            limpiarIntentosIp(ip);
-
-            // 4. Generar tokens
             String jwt = jwtUtil.generateToken(usuario);
             String refreshToken = jwtUtil.generateRefreshToken(usuario);
 
-            loginLog.setResultado("Éxito");
-            loginLog.setDescripcion("Inicio de sesión exitoso");
-            loginRepository.save(loginLog);
+            // Registrar log de éxito
+            registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(), sitio,
+                    "Éxito", "Inicio de sesión exitoso", Evento.LOGIN_EXITOSO, ip);
 
             return new AuthResponse(jwt, refreshToken);
-
         } catch (BadCredentialsException e) {
-            // Contraseña incorrecta → aumentar contador de usuario
-            usuario.setIntentosFallidos(usuario.getIntentosFallidos() + 1);
-
-            if (usuario.getIntentosFallidos() >= 5) {
-                usuario.setCuentaBloqueadaHasta(Date.from(
-                        Instant.now().plus(15, ChronoUnit.MINUTES) // bloqueado 15 minutos
-                ));
-                // Notificar a administradores
-                notificacionService.notificarBloqueoCuenta(usuario);
+            //  Contraseña incorrecta
+            if (usuario != null) {
+                loginAttemptService.registrarIntentoFallidoUsuario(usuario); // incrementa y bloquea si aplica
             }
-            usuarioRepository.save(usuario);
+            loginAttemptService.registrarIntentoFallidoIp(ip);
 
-            // También registrar intento por IP
-            registrarIntentoFallidoIp(ip);
-
-            loginLog.setResultado("Fallo");
-            loginLog.setDescripcion("Inicio de sesión fallido: contraseña incorrecta");
-            loginRepository.save(loginLog);
+            registrarLog(request.email(), usuario != null ? usuario.getId() : null,
+                    usuario != null ? usuario.getRol() : Rol.DESCONOCIDO,
+                    sitio, "Fallo", "Inicio de sesión fallido: contraseña incorrecta",
+                    Evento.LOGIN_FALLIDO, ip);
 
             throw new BadCredentialsException("Contraseña incorrecta");
         }
     }
 
-    public AuthResponse loginWithGoogle(String email, String nombre) {
+    public AuthResponse loginWithGoogle(String email, String nombre, Sitio sitio, String ip) {
+        // 0. Revisar bloqueo por IP
+        if (loginAttemptService.estaIpBloqueada(ip)) {
+            registrarLog(email, null, Rol.DESCONOCIDO, sitio,
+                    "Fallo", "IP bloqueada temporalmente por múltiples intentos fallidos",
+                    Evento.LOGIN_FALLIDO, ip);
+            throw new BloqueoException("La IP está bloqueada. Intente más tarde.");
+        }
+
         // 1. Validar parámetros
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("El correo proporcionado por Google no es válido");
         }
 
-        // 2. Buscar al usuario en la BD
-        Optional<Usuario> usuarioOpt = usuarioRepository.findByCorreo(email);
+        // 2. Buscar o crear usuario
+        Usuario usuario = usuarioRepository.findByCorreo(email).orElseGet(() -> {
+            Usuario u = new Usuario();
+            u.setCorreo(email);
+            u.setNombre(nombre != null ? nombre : "Usuario Google");
+            u.setApellidoPaterno("N/A");
+            u.setApellidoMaterno("N/A");
+            u.setGenero("Otro");
+            u.setTelefono("0000000000");
+            u.setRol(Rol.USER);
+            u.setStatus(Status.PENDIENTE);
+            u.setFechaRegistro(new Date());
+            u.setIntentosFallidos(0);
+            u.setCuentaBloqueadaHasta(null);
+            usuarioRepository.save(u);
+            return u;
+        });
 
-        Usuario usuario;
-        if (usuarioOpt.isPresent()) {
-            usuario = usuarioOpt.get();
+        // 3. Revisar bloqueo por cuenta
+        if (loginAttemptService.estaCuentaBloqueada(usuario)) {
+            registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(), sitio,
+                    "Fallo", "Cuenta bloqueada temporalmente por múltiples intentos fallidos",
+                    Evento.LOGIN_FALLIDO, ip);
+            throw new BloqueoException("La cuenta está bloqueada. Intente más tarde.");
         } else {
-            // 3. Si no existe, registrarlo automáticamente
-            usuario = new Usuario();
-            usuario.setCorreo(email);
-            usuario.setNombre(nombre != null ? nombre : "Usuario Google");
-            usuario.setApellidoPaterno("N/A"); // puedes pedir completar datos luego
-            usuario.setApellidoMaterno("N/A");
-            usuario.setGenero("Otro");
-            usuario.setTelefono("0000000000"); // placeholder
-            usuario.setRol(Rol.USER);
-            usuario.setStatus(Status.PENDIENTE); // con Google lo activamos directo
-            usuario.setFechaRegistro(new Date());
-            usuario.setIntentosFallidos(0);
-            usuario.setCuentaBloqueadaHasta(null);
-
-            usuarioRepository.save(usuario);
+            // Limpiar bloqueo expirado si aplica
+            if (usuario.getCuentaBloqueadaHasta() != null && usuario.getCuentaBloqueadaHasta().before(new Date())) {
+                loginAttemptService.limpiarIntentosUsuario(usuario);
+            }
         }
 
         // 4. Generar tokens
         String jwt = jwtUtil.generateToken(usuario);
         String refreshToken = jwtUtil.generateRefreshToken(usuario);
 
+        // 5. Registrar login con Google (éxito)
+        registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(), sitio,
+                "Éxito", "Inicio de sesión con Google exitoso",
+                Evento.LOGIN_GOOGLE_EXITOSO, ip);
+
         return new AuthResponse(jwt, refreshToken);
     }
 
-    public AuthResponse refreshToken(String refreshToken) {
+    public AuthResponse refreshToken(String refreshToken, Sitio sitio, String ip) {
         if (refreshToken == null || refreshToken.isBlank()) {
             throw new IllegalArgumentException("El refresh token es requerido");
         }
@@ -288,42 +241,167 @@ public class AuthService {
         try {
             username = jwtUtil.extractUsername(refreshToken);
         } catch (Exception e) {
+            registrarLog("Desconocido", null, Rol.DESCONOCIDO, sitio,
+                    "Fallo", "Refresh token inválido", Evento.REFRESH_TOKEN_FALLIDO, ip);
             throw new SecurityException("Refresh token inválido");
         }
 
         Usuario usuario = usuarioRepository.findByCorreo(username)
                 .orElseThrow(() -> new NoSuchElementException("Usuario no encontrado"));
 
-        if (!jwtUtil.isTokenValid(refreshToken, username)) {
+        if (!jwtUtil.isRefreshTokenValid(refreshToken, username)) {
+            String descripcion = jwtUtil.extractClaims(refreshToken).getExpiration().before(new Date()) ?
+                    "Refresh token expirado" : "Refresh token inválido";
+            registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(),
+                    sitio, "Fallo", descripcion, Evento.REFRESH_TOKEN_FALLIDO, ip);
             throw new SecurityException("Refresh token inválido o expirado. Se requiere iniciar sesión nuevamente.");
         }
 
         String newJwt = jwtUtil.generateToken(usuario);
+
+        // Registrar éxito de refresh
+        registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(),
+                sitio, "Éxito", "Refresh token exitoso", Evento.REFRESH_TOKEN_EXITOSO, ip);
+
         return new AuthResponse(newJwt, refreshToken);
     }
 
+    @Transactional
+    public void requestPasswordReset(String email, Sitio sitio, String ip) {
 
-
-    private void registrarIntentoFallidoIp(String ip) {
-        IpBlock ipBlock = ipBlockRepository.findByIp(ip).orElse(new IpBlock());
-        ipBlock.setIp(ip);
-        ipBlock.setIntentosFallidos(ipBlock.getIntentosFallidos() + 1);
-
-        if (ipBlock.getIntentosFallidos() >= 5) {
-            Date hasta = Date.from(Instant.now().plus(15, ChronoUnit.MINUTES));
-            ipBlock.setBloqueadaHasta(hasta);
-            notificacionService.notificarBloqueoIp(ip, hasta);
+        // --- 1. Rate limit por IP ---
+        if (passwordResetAttemptService.isBlocked(email, ip)) {
+            registrarLog(email, null, Rol.DESCONOCIDO, sitio,
+                    "Fallo", "Intento de recuperación bloqueado por límite de solicitudes",
+                    Evento.PASSWORD_RESET_SOLICITUD, ip);
+            return; // No procesar
         }
 
-        ipBlockRepository.save(ipBlock);
+        passwordResetAttemptService.registerAttempt(email, ip);
+
+        // --- 2. Buscar usuario ---
+        Optional<Usuario> usuarioOpt = usuarioRepository.findByCorreo(email);
+
+        if (usuarioOpt.isPresent()) {
+            Usuario usuario = usuarioOpt.get();
+
+            // --- Limpiar tokens antiguos ---
+            tokenRepository.deleteByUsuario(usuario);
+
+            // --- 3. Generar token seguro ---
+            SecureRandom secureRandom = new SecureRandom();
+            byte[] tokenBytes = new byte[32]; // 256 bits
+            secureRandom.nextBytes(tokenBytes);
+            String token = Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
+
+            PasswordResetToken resetToken = new PasswordResetToken();
+            resetToken.setToken(token);
+            resetToken.setUsuario(usuario);
+            resetToken.setExpiryDate(Date.from(Instant.now().plus(15, ChronoUnit.MINUTES)));
+            tokenRepository.save(resetToken);
+
+            // --- Enviar correo ---
+            String resetLink = "http://localhost:5173/reset-password?token=" + token;
+
+            notificacionService.enviarCorreo(usuario.getCorreo(),
+                    "Recuperación de contraseña",
+                    "Has solicitado restablecer tu contraseña.\n\n" +
+                            "Haz clic en el siguiente enlace para continuar:\n" + resetLink + "\n\n" +
+                            "Este enlace expirará en 15 minutos.");
+
+            registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(),
+                    sitio, "Éxito", "Solicitud de cambio de contraseña enviada",
+                    Evento.PASSWORD_RESET_SOLICITUD, ip);
+        } else {
+            // Usuario no encontrado: no hacemos nada visible para el cliente
+            registrarLog(email, null, Rol.DESCONOCIDO, sitio,
+                    "Aviso", "Solicitud de recuperación para correo no registrado",
+                    Evento.PASSWORD_RESET_SOLICITUD, ip);
+        }
     }
 
-    private void limpiarIntentosIp(String ip) {
-        ipBlockRepository.findByIp(ip).ifPresent(ipBlock -> {
-            ipBlock.setIntentosFallidos(0);
-            ipBlock.setBloqueadaHasta(null);
-            ipBlockRepository.save(ipBlock);
-        });
+    public Usuario verifyResetToken(String token, Sitio sitio, String ip) {
+        try {
+            Optional<PasswordResetToken> resetTokenOpt = tokenRepository.findByToken(token);
+            if (resetTokenOpt.isEmpty() || resetTokenOpt.get().getExpiryDate().before(new Date())) {
+                registrarLog("Desconocido", null, Rol.DESCONOCIDO, sitio,
+                        "Fallo", "Token de recuperación inválido o expirado",
+                        Evento.PASSWORD_RESET_VERIFICADO, ip);
+                throw new IllegalArgumentException("Token inválido o expirado"); // Se maneja internamente
+            }
+
+            Usuario usuario = resetTokenOpt.get().getUsuario();
+            registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(),
+                    sitio, "Éxito", "Token de recuperación verificado",
+                    Evento.PASSWORD_RESET_VERIFICADO, ip);
+
+            return usuario;
+
+        } catch (Exception e) {
+            registrarLog("Desconocido", null, Rol.DESCONOCIDO, sitio,
+                    "Fallo", "Error al verificar token", Evento.PASSWORD_RESET_VERIFICADO, ip);
+            throw e;
+        }
     }
 
+
+    @Transactional
+    public boolean resetPassword(String token, String newPassword, Sitio sitio, String ip) {
+        try {
+            Usuario usuario = verifyResetToken(token, sitio, ip);
+
+            // --- Validación de fuerza de contraseña ---
+            if (!isPasswordStrong(newPassword)) {
+                registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(),
+                        sitio, "Fallo", "Contraseña no cumple criterios de seguridad",
+                        Evento.PASSWORD_RESET_COMPLETADO, ip);
+                return false;
+            }
+
+            // --- Guardar nueva contraseña ---
+            usuario.setContrasena(passwordEncoder.encode(newPassword));
+            usuarioRepository.save(usuario);
+
+            // --- Eliminar token ---
+            tokenRepository.deleteByUsuario(usuario);
+
+            // --- Enviar correo de confirmación ---
+            notificacionService.enviarCorreo(usuario.getCorreo(),
+                    "Contraseña cambiada",
+                    "Tu contraseña ha sido actualizada correctamente.");
+
+            registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(),
+                    sitio, "Éxito", "Contraseña actualizada exitosamente",
+                    Evento.PASSWORD_RESET_COMPLETADO, ip);
+
+            return true;
+
+        } catch (Exception e) {
+            registrarLog("Desconocido", null, Rol.DESCONOCIDO, sitio,
+                    "Fallo", "Error al actualizar contraseña", Evento.PASSWORD_RESET_COMPLETADO, ip);
+            return false;
+        }
+    }
+
+    // Metodo auxiliar para validar fuerza de contraseña
+    private boolean isPasswordStrong(String password) {
+        if (password == null) return false;
+        // Al menos 8 caracteres, una mayúscula, una minuscula, un número, un símbolo
+        return password.matches("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");
+    }
+
+    private void registrarLog(String correo, Long idUsuario, Rol rol, Sitio sitio,
+                              String resultado, String descripcion, Evento tipoEvento, String ip) {
+        Login log = new Login();
+        log.setCorreo(correo != null ? correo : "Desconocido");
+        log.setIdUsuario(idUsuario);
+        log.setRol(rol != null ? rol : Rol.DESCONOCIDO);
+        log.setSitio(sitio != null ? sitio : Sitio.WEB);
+        log.setResultado(resultado);
+        log.setDescripcion(descripcion);
+        log.setTipoEvento(tipoEvento != null ? tipoEvento : Evento.PRUEBAS);
+        log.setFechaActividad(new Date());
+        log.setIp(ip);
+        loginRepository.save(log);
+    }
 }
