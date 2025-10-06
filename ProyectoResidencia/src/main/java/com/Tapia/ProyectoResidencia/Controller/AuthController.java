@@ -22,8 +22,10 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse> register(@Valid @RequestBody RegisterRequest request) {
-        String mensaje = authService.register(request);
+    public ResponseEntity<ApiResponse> register(@Valid @RequestBody RegisterRequest request,
+                                                HttpServletRequest httpRequest) {
+        String ip = IpUtils.extractClientIp(httpRequest);
+        String mensaje = authService.register(request, ip);
         return ResponseEntity.ok(new ApiResponse("success", mensaje));
     }
 
@@ -59,27 +61,6 @@ public class AuthController {
                 "Si el correo ingresado está registrado, se enviará un código de recuperación."
         ));
     }
-
-    /*
-    @PostMapping("/verify-reset-token")
-    public ResponseEntity<ApiResponse> verifyResetToken(@RequestBody Map<String, String> body, HttpServletRequest httpRequest) {
-        String ip = IpUtils.extractClientIp(httpRequest);
-
-        try {
-            authService.verifyResetToken(body.get("token"), Sitio.WEB, ip);
-            return ResponseEntity.ok(new ApiResponse(
-                    "success",
-                    "Si el token es válido, puede continuar con el cambio de contraseña."
-            ));
-        } catch (Exception e) {
-            // Mensaje genérico en caso de error
-            return ResponseEntity.ok(new ApiResponse(
-                    "success",
-                    "Si el token es válido, puede continuar con el cambio de contraseña."
-            ));
-        }
-    }*/
-
 
     @PostMapping("/reset-password")
     public ResponseEntity<ApiResponse> resetPassword(@RequestBody Map<String, String> body, HttpServletRequest httpRequest) {

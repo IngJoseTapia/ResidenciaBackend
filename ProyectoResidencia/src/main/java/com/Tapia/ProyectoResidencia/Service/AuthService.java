@@ -3,15 +3,11 @@ package com.Tapia.ProyectoResidencia.Service;
 import com.Tapia.ProyectoResidencia.DTO.LoginRequest;
 import com.Tapia.ProyectoResidencia.DTO.RegisterRequest;
 import com.Tapia.ProyectoResidencia.DTO.AuthResponse;
-import com.Tapia.ProyectoResidencia.Enum.Evento;
-import com.Tapia.ProyectoResidencia.Enum.Rol;
-import com.Tapia.ProyectoResidencia.Enum.Sitio;
-import com.Tapia.ProyectoResidencia.Enum.Status;
+import com.Tapia.ProyectoResidencia.Enum.*;
 import com.Tapia.ProyectoResidencia.Exception.BloqueoException;
-import com.Tapia.ProyectoResidencia.Model.Login;
+import com.Tapia.ProyectoResidencia.Model.LoginLog;
 import com.Tapia.ProyectoResidencia.Model.PasswordResetToken;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
-import com.Tapia.ProyectoResidencia.Repository.LoginRepository;
 import com.Tapia.ProyectoResidencia.Repository.PasswordResetTokenRepository;
 import com.Tapia.ProyectoResidencia.Repository.UsuarioRepository;
 import com.Tapia.ProyectoResidencia.Security.JwtUtil;
@@ -31,36 +27,39 @@ import java.util.*;
 public class AuthService {
 
     private final UsuarioRepository usuarioRepository;
-    private final LoginRepository loginRepository;
+    //private final LoginRepository loginRepository;
     private final PasswordResetTokenRepository tokenRepository;
-    private final NotificacionService notificacionService;
+    private final EmailLogService emailLogService;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtUtil jwtUtil;
-    private final LoginAttemptService loginAttemptService;
-    private final PasswordResetAttemptService passwordResetAttemptService;
+    private final AccountBlockService accountBlockService;
+    private final IpBlockService ipBlockService;
+    private final LoginLogService loginLogService;
 
     public AuthService(UsuarioRepository usuarioRepository,
-                       LoginRepository loginRepository,
+                       //LoginRepository loginRepository,
                        PasswordResetTokenRepository tokenRepository,
-                       NotificacionService notificacionService,
+                       EmailLogService emailLogService,
                        PasswordEncoder passwordEncoder,
                        AuthenticationManager authenticationManager,
                        JwtUtil jwtUtil,
-                       LoginAttemptService loginAttemptService,
-                       PasswordResetAttemptService passwordResetAttemptService) {
+                       AccountBlockService accountBlockService,
+                       IpBlockService ipBlockService,
+                       LoginLogService loginLogService) {
         this.usuarioRepository = usuarioRepository;
-        this.loginRepository = loginRepository;
+        //this.loginRepository = loginRepository;
         this.tokenRepository = tokenRepository;
-        this.notificacionService = notificacionService;
+        this.emailLogService = emailLogService;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.jwtUtil = jwtUtil;
-        this.loginAttemptService = loginAttemptService;
-        this.passwordResetAttemptService = passwordResetAttemptService;
+        this.accountBlockService = accountBlockService;
+        this.ipBlockService = ipBlockService;
+        this.loginLogService = loginLogService;
     }
 
-    public String register(RegisterRequest request) {
+    public String register(RegisterRequest request, String ip) {
         // 1. Validaciones de negocio mínimas
         if (!request.password().equals(request.confirmPassword())) {
             throw new IllegalArgumentException("Las contraseñas no coinciden");
@@ -82,23 +81,23 @@ public class AuthService {
         usuario.setRol(Rol.USER);
         usuario.setStatus(Status.PENDIENTE); // Registro híbrido: requiere aprobación
         usuario.setFechaRegistro(new Date());
-        usuario.setIntentosFallidos(0);
-        usuario.setCuentaBloqueadaHasta(null);
 
         // 3. Guardar en la base de datos
         // Si algún campo viola las validaciones del modelo, Hibernate lanzará ConstraintViolationException
         usuarioRepository.save(usuario);
 
         // Registrar log de registro (opcional)
-        registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(), Sitio.WEB,
-                "Éxito", "Usuario registrado", Evento.USER_REGISTRADO, null);
+        loginLogService.registrarLogsUsuario(usuario, Evento.USER_REGISTRADO, Resultado.EXITO, Sitio.WEB, ip, "1");
+
+        // Notificación
+        emailLogService.notificarUsuarios(usuario, Evento.USER_REGISTRADO, Date.from(Instant.now()), null);
 
         return "Usuario registrado correctamente. Espera la aprobación de un administrador.";
     }
 
     public AuthResponse login(LoginRequest request, Sitio sitio, String ip) {
         Usuario usuario = null;
-        Login loginLog = new Login();
+        LoginLog loginLog = new LoginLog();
         loginLog.setCorreo(request.email());
         loginLog.setFechaActividad(new Date());
         loginLog.setSitio(sitio);
@@ -106,10 +105,8 @@ public class AuthService {
 
         try {
             // 0. Revisar bloqueo por IP
-            if (loginAttemptService.estaIpBloqueada(ip)) {
-                registrarLog(request.email(), null, Rol.DESCONOCIDO, sitio,
-                        "Fallo", "IP bloqueada temporalmente por múltiples intentos fallidos",
-                        Evento.LOGIN_FALLIDO, ip);
+            if (ipBlockService.estaBloqueada(ip)) {
+                loginLogService.registrarLogsCorreo(request.email(), Evento.LOGIN_FALLIDO, Resultado.FALLO, sitio, ip, "0");
                 throw new BloqueoException("La IP está bloqueada. Intente más tarde.");
             }
 
@@ -117,11 +114,8 @@ public class AuthService {
             Optional<Usuario> usuarioOpt = usuarioRepository.findByCorreo(request.email());
             if (usuarioOpt.isEmpty()) {
                 // incrementar contador por IP
-                loginAttemptService.registrarIntentoFallidoIp(ip);
-
-                registrarLog(request.email(), null, Rol.DESCONOCIDO, sitio,
-                        "Fallo", "Inicio de sesión fallido: correo no registrado",
-                        Evento.LOGIN_FALLIDO, ip);
+                ipBlockService.registrarIntentoFallido(ip);
+                loginLogService.registrarLogsCorreo(request.email(), Evento.LOGIN_FALLIDO, Resultado.FALLO, sitio, ip, "1");
                 throw new NoSuchElementException("El correo no está registrado");
             }
 
@@ -130,16 +124,12 @@ public class AuthService {
             loginLog.setRol(usuario.getRol());
 
             // 2. Revisar bloqueo por cuenta
-            if (loginAttemptService.estaCuentaBloqueada(usuario)) {
-                registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(), sitio,
-                        "Fallo", "Cuenta bloqueada temporalmente por múltiples intentos fallidos",
-                        Evento.LOGIN_FALLIDO, ip);
+            if (accountBlockService.estaBloqueada(usuario, Evento.LOGIN_FALLIDO)) {
+                loginLogService.registrarLogsUsuario(usuario, Evento.LOGIN_FALLIDO, Resultado.FALLO, sitio, ip, "2");
                 throw new BloqueoException("La cuenta está bloqueada. Intente más tarde.");
             } else {
-                // Si había bloqueo expirado, limpiar
-                if (usuario.getCuentaBloqueadaHasta() != null && usuario.getCuentaBloqueadaHasta().before(new Date())) {
-                    loginAttemptService.limpiarIntentosUsuario(usuario);
-                }
+                // limpia si ya expiró
+                accountBlockService.limpiarSiExpirado(usuario, Evento.LOGIN_FALLIDO);
             }
 
             // 3. Autenticar (puede lanzar BadCredentialsException)
@@ -148,51 +138,44 @@ public class AuthService {
             );
 
             // 4. Login exitoso: resetear contadores y generar tokens
-            loginAttemptService.limpiarIntentosUsuario(usuario);
-            loginAttemptService.limpiarIntentosIp(ip);
+            accountBlockService.limpiarBloqueo(usuario, Evento.LOGIN_FALLIDO);
+            ipBlockService.limpiarIntentos(ip);
 
             String jwt = jwtUtil.generateToken(usuario);
             String refreshToken = jwtUtil.generateRefreshToken(usuario);
 
             // Registrar log de éxito
-            registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(), sitio,
-                    "Éxito", "Inicio de sesión exitoso", Evento.LOGIN_EXITOSO, ip);
+            loginLogService.registrarLogsUsuario(usuario, Evento.LOGIN_EXITOSO, Resultado.EXITO, sitio, ip, null);
 
             return new AuthResponse(jwt, refreshToken);
         } catch (BadCredentialsException e) {
             //  Contraseña incorrecta
             if (usuario != null) {
-                loginAttemptService.registrarIntentoFallidoUsuario(usuario); // incrementa y bloquea si aplica
+                accountBlockService.registrarIntentoFallido(usuario, Evento.LOGIN_FALLIDO, ip); // incrementa y bloquea si aplica
             }
-            loginAttemptService.registrarIntentoFallidoIp(ip);
-
-            registrarLog(request.email(), usuario != null ? usuario.getId() : null,
-                    usuario != null ? usuario.getRol() : Rol.DESCONOCIDO,
-                    sitio, "Fallo", "Inicio de sesión fallido: contraseña incorrecta",
-                    Evento.LOGIN_FALLIDO, ip);
+            ipBlockService.registrarIntentoFallido(ip);
+            loginLogService.registrarLogsUsuario(usuario, Evento.LOGIN_FALLIDO, Resultado.FALLO, Sitio.WEB, ip, "3");
 
             throw new BadCredentialsException("Contraseña incorrecta");
         }
     }
 
-    public AuthResponse loginWithGoogle(String email, String nombre, Sitio sitio, String ip) {
+    public AuthResponse loginWithGoogle(String correo, String nombre, Sitio sitio, String ip) {
         // 0. Revisar bloqueo por IP
-        if (loginAttemptService.estaIpBloqueada(ip)) {
-            registrarLog(email, null, Rol.DESCONOCIDO, sitio,
-                    "Fallo", "IP bloqueada temporalmente por múltiples intentos fallidos",
-                    Evento.LOGIN_FALLIDO, ip);
+        if (ipBlockService.estaBloqueada(ip)) {
+            loginLogService.registrarLogsCorreo(correo, Evento.LOGIN_FALLIDO, Resultado.FALLO, sitio, ip, "0");
             throw new BloqueoException("La IP está bloqueada. Intente más tarde.");
         }
 
         // 1. Validar parámetros
-        if (email == null || email.isBlank()) {
+        if (correo == null || correo.isBlank()) {
             throw new IllegalArgumentException("El correo proporcionado por Google no es válido");
         }
 
         // 2. Buscar o crear usuario
-        Usuario usuario = usuarioRepository.findByCorreo(email).orElseGet(() -> {
+        Usuario usuario = usuarioRepository.findByCorreo(correo).orElseGet(() -> {
             Usuario u = new Usuario();
-            u.setCorreo(email);
+            u.setCorreo(correo);
             u.setNombre(nombre != null ? nombre : "Usuario Google");
             u.setApellidoPaterno("N/A");
             u.setApellidoMaterno("N/A");
@@ -201,23 +184,23 @@ public class AuthService {
             u.setRol(Rol.USER);
             u.setStatus(Status.PENDIENTE);
             u.setFechaRegistro(new Date());
-            u.setIntentosFallidos(0);
-            u.setCuentaBloqueadaHasta(null);
+            String randomPassword = "AUTO_" + UUID.randomUUID();
+            u.setContrasena(randomPassword); // sin encode
             usuarioRepository.save(u);
+
+            emailLogService.notificarUsuarios(u, Evento.USER_REGISTRADO_GOOGLE, Date.from(Instant.now()), null);
+            loginLogService.registrarLogsUsuario(u, Evento.USER_REGISTRADO_GOOGLE, Resultado.EXITO, sitio, ip, null);
+
             return u;
         });
 
         // 3. Revisar bloqueo por cuenta
-        if (loginAttemptService.estaCuentaBloqueada(usuario)) {
-            registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(), sitio,
-                    "Fallo", "Cuenta bloqueada temporalmente por múltiples intentos fallidos",
-                    Evento.LOGIN_FALLIDO, ip);
+        if (accountBlockService.estaBloqueada(usuario, Evento.LOGIN_FALLIDO)) {
+             loginLogService.registrarLogsUsuario(usuario, Evento.LOGIN_FALLIDO, Resultado.FALLO, sitio, ip, "2");
             throw new BloqueoException("La cuenta está bloqueada. Intente más tarde.");
         } else {
-            // Limpiar bloqueo expirado si aplica
-            if (usuario.getCuentaBloqueadaHasta() != null && usuario.getCuentaBloqueadaHasta().before(new Date())) {
-                loginAttemptService.limpiarIntentosUsuario(usuario);
-            }
+            // limpia si ya expiró
+            accountBlockService.limpiarSiExpirado(usuario, Evento.LOGIN_FALLIDO);
         }
 
         // 4. Generar tokens
@@ -225,9 +208,7 @@ public class AuthService {
         String refreshToken = jwtUtil.generateRefreshToken(usuario);
 
         // 5. Registrar login con Google (éxito)
-        registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(), sitio,
-                "Éxito", "Inicio de sesión con Google exitoso",
-                Evento.LOGIN_GOOGLE_EXITOSO, ip);
+        loginLogService.registrarLogsUsuario(usuario, Evento.LOGIN_GOOGLE_EXITOSO, Resultado.EXITO, sitio, ip, null);
 
         return new AuthResponse(jwt, refreshToken);
     }
@@ -241,8 +222,7 @@ public class AuthService {
         try {
             username = jwtUtil.extractUsername(refreshToken);
         } catch (Exception e) {
-            registrarLog("Desconocido", null, Rol.DESCONOCIDO, sitio,
-                    "Fallo", "Refresh token inválido", Evento.REFRESH_TOKEN_FALLIDO, ip);
+            loginLogService.registrarLogsCorreo("Desconocido", Evento.REFRESH_TOKEN_FALLIDO, Resultado.FALLO, sitio, ip, null);
             throw new SecurityException("Refresh token inválido");
         }
 
@@ -252,38 +232,43 @@ public class AuthService {
         if (!jwtUtil.isRefreshTokenValid(refreshToken, username)) {
             String descripcion = jwtUtil.extractClaims(refreshToken).getExpiration().before(new Date()) ?
                     "Refresh token expirado" : "Refresh token inválido";
-            registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(),
-                    sitio, "Fallo", descripcion, Evento.REFRESH_TOKEN_FALLIDO, ip);
+            loginLogService.registrarLogsUsuario(usuario, Evento.REFRESH_TOKEN_FALLIDO, Resultado.FALLO, sitio, ip, descripcion);
             throw new SecurityException("Refresh token inválido o expirado. Se requiere iniciar sesión nuevamente.");
         }
 
         String newJwt = jwtUtil.generateToken(usuario);
 
         // Registrar éxito de refresh
-        registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(),
-                sitio, "Éxito", "Refresh token exitoso", Evento.REFRESH_TOKEN_EXITOSO, ip);
+        loginLogService.registrarLogsUsuario(usuario, Evento.REFRESH_TOKEN_EXITOSO, Resultado.EXITO, sitio, ip, null);
 
         return new AuthResponse(newJwt, refreshToken);
     }
 
     @Transactional
     public void requestPasswordReset(String email, Sitio sitio, String ip) {
-
-        // --- 1. Rate limit por IP ---
-        if (passwordResetAttemptService.isBlocked(email, ip)) {
-            registrarLog(email, null, Rol.DESCONOCIDO, sitio,
-                    "Fallo", "Intento de recuperación bloqueado por límite de solicitudes",
-                    Evento.PASSWORD_RESET_SOLICITUD, ip);
-            return; // No procesar
+        // --- 0. Revisar bloqueo por IP ---
+        if (ipBlockService.estaBloqueada(ip)) {
+            loginLogService.registrarLogsCorreo(email, Evento.PASSWORD_RESET_SOLICITUD, Resultado.FALLO, sitio, ip, "0");
+            throw new BloqueoException("La IP está bloqueada. Intente más tarde.");
         }
 
-        passwordResetAttemptService.registerAttempt(email, ip);
-
-        // --- 2. Buscar usuario ---
+        // --- 1. Buscar usuario ---
         Optional<Usuario> usuarioOpt = usuarioRepository.findByCorreo(email);
 
         if (usuarioOpt.isPresent()) {
             Usuario usuario = usuarioOpt.get();
+
+            // --- Revisar bloqueo por cuenta ---
+            if (accountBlockService.estaBloqueada(usuario, Evento.PASSWORD_RESET_FALLIDO)) {
+                loginLogService.registrarLogsUsuario(usuario, Evento.PASSWORD_RESET_SOLICITUD, Resultado.FALLO, sitio, ip, "1");
+                throw new BloqueoException("La cuenta está bloqueada. Intente más tarde.");
+            }
+
+            // Registrar intento de reset (aunque sea válido)
+            accountBlockService.registrarIntentoFallido(usuario, Evento.PASSWORD_RESET_SOLICITUD_SIN_VERIFICAR, ip);
+
+            // --- Limpiar intentos si ya expiró el bloqueo ---
+            accountBlockService.limpiarSiExpirado(usuario, Evento.PASSWORD_RESET_FALLIDO);
 
             // --- Limpiar tokens antiguos ---
             tokenRepository.deleteByUsuario(usuario);
@@ -302,48 +287,75 @@ public class AuthService {
 
             // --- Enviar correo ---
             String resetLink = "http://localhost:5173/reset-password?token=" + token;
-
-            notificacionService.enviarCorreo(usuario.getCorreo(),
-                    "Recuperación de contraseña",
-                    "Has solicitado restablecer tu contraseña.\n\n" +
-                            "Haz clic en el siguiente enlace para continuar:\n" + resetLink + "\n\n" +
-                            "Este enlace expirará en 15 minutos.");
-
-            registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(),
-                    sitio, "Éxito", "Solicitud de cambio de contraseña enviada",
-                    Evento.PASSWORD_RESET_SOLICITUD, ip);
+            emailLogService.notificarUsuarios(usuario, Evento.PASSWORD_RESET_SOLICITUD, Date.from(Instant.now()), resetLink);
+            loginLogService.registrarLogsUsuario(usuario, Evento.PASSWORD_RESET_SOLICITUD, Resultado.EXITO, sitio, ip, "2");
         } else {
-            // Usuario no encontrado: no hacemos nada visible para el cliente
-            registrarLog(email, null, Rol.DESCONOCIDO, sitio,
-                    "Aviso", "Solicitud de recuperación para correo no registrado",
-                    Evento.PASSWORD_RESET_SOLICITUD, ip);
+            // Usuario no encontrado → aun así incrementar contador por IP
+            ipBlockService.registrarIntentoFallido(ip);
+            loginLogService.registrarLogsCorreo(email, Evento.PASSWORD_RESET_SOLICITUD, Resultado.FALLO, sitio, ip, "1");
         }
     }
 
     public Usuario verifyResetToken(String token, Sitio sitio, String ip) {
         try {
-            Optional<PasswordResetToken> resetTokenOpt = tokenRepository.findByToken(token);
-            if (resetTokenOpt.isEmpty() || resetTokenOpt.get().getExpiryDate().before(new Date())) {
-                registrarLog("Desconocido", null, Rol.DESCONOCIDO, sitio,
-                        "Fallo", "Token de recuperación inválido o expirado",
-                        Evento.PASSWORD_RESET_VERIFICADO, ip);
-                throw new IllegalArgumentException("Token inválido o expirado"); // Se maneja internamente
+            // 0. Revisar bloqueo por IP
+            if (ipBlockService.estaBloqueada(ip)) {
+                loginLogService.registrarLogsCorreo("Desconocido", Evento.PASSWORD_RESET_FALLIDO, Resultado.FALLO, sitio, ip, "0");
+                throw new BloqueoException("La IP está bloqueada. Intente más tarde.");
             }
 
-            Usuario usuario = resetTokenOpt.get().getUsuario();
-            registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(),
-                    sitio, "Éxito", "Token de recuperación verificado",
-                    Evento.PASSWORD_RESET_VERIFICADO, ip);
+            // 1. Buscar token en la base de datos
+            Optional<PasswordResetToken> resetTokenOpt = tokenRepository.findByToken(token);
+
+            if (resetTokenOpt.isEmpty()) {
+                // Token inválido: registrar intento fallido por IP
+                ipBlockService.registrarIntentoFallido(ip);
+                loginLogService.registrarLogsCorreo("Desconocido", Evento.PASSWORD_RESET_TOKEN_INVALIDO, Resultado.FALLO, sitio, ip, null);
+
+                throw new IllegalArgumentException("Token inválido");
+            }
+
+            PasswordResetToken resetToken = resetTokenOpt.get();
+            Usuario usuario = resetToken.getUsuario();
+
+            // --- Revisar bloqueo por cuenta ---
+            if (accountBlockService.estaBloqueada(usuario, Evento.PASSWORD_RESET_FALLIDO)) {
+                loginLogService.registrarLogsUsuario(usuario, Evento.PASSWORD_RESET_FALLIDO, Resultado.FALLO, sitio, ip, "1");
+                throw new BloqueoException("La cuenta está bloqueada. Intente más tarde.");
+            }
+
+            // 2. Verificar expiración del token
+            if (resetToken.getExpiryDate().before(new Date())) {
+                // Token expirado → eliminarlo y registrar log
+                tokenRepository.delete(resetToken);
+
+                loginLogService.registrarLogsUsuario(usuario, Evento.PASSWORD_RESET_TOKEN_EXPIRADO, Resultado.FALLO, sitio, ip, null);
+
+                // Registrar intento fallido en cuenta
+                accountBlockService.registrarIntentoFallido(usuario, Evento.PASSWORD_RESET_FALLIDO, ip);
+
+                // También incrementar intentos por IP
+                ipBlockService.registrarIntentoFallido(ip);
+
+                throw new IllegalArgumentException("Token expirado");
+            }
+
+            // --- Token válido: limpiar bloqueos ---
+            accountBlockService.limpiarBloqueo(usuario, Evento.PASSWORD_RESET_FALLIDO);
+            accountBlockService.limpiarBloqueo(usuario, Evento.PASSWORD_RESET_SOLICITUD_SIN_VERIFICAR);
+            ipBlockService.limpiarIntentos(ip);
+
+            // 3. Token válido
+            loginLogService.registrarLogsUsuario(usuario, Evento.PASSWORD_RESET_VERIFICADO, Resultado.EXITO, sitio, ip, null);
 
             return usuario;
 
         } catch (Exception e) {
-            registrarLog("Desconocido", null, Rol.DESCONOCIDO, sitio,
-                    "Fallo", "Error al verificar token", Evento.PASSWORD_RESET_VERIFICADO, ip);
+            // Captura cualquier excepción inesperada
+            loginLogService.registrarLogsCorreo("Desconocido", Evento.PASSWORD_RESET_ERROR, Resultado.FALLO, sitio, ip, "0");
             throw e;
         }
     }
-
 
     @Transactional
     public boolean resetPassword(String token, String newPassword, Sitio sitio, String ip) {
@@ -352,9 +364,7 @@ public class AuthService {
 
             // --- Validación de fuerza de contraseña ---
             if (!isPasswordStrong(newPassword)) {
-                registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(),
-                        sitio, "Fallo", "Contraseña no cumple criterios de seguridad",
-                        Evento.PASSWORD_RESET_COMPLETADO, ip);
+                loginLogService.registrarLogsUsuario(usuario, Evento.PASSWORD_RESET_RECHAZADO, Resultado.FALLO, sitio, ip, null);
                 return false;
             }
 
@@ -366,42 +376,22 @@ public class AuthService {
             tokenRepository.deleteByUsuario(usuario);
 
             // --- Enviar correo de confirmación ---
-            notificacionService.enviarCorreo(usuario.getCorreo(),
-                    "Contraseña cambiada",
-                    "Tu contraseña ha sido actualizada correctamente.");
-
-            registrarLog(usuario.getCorreo(), usuario.getId(), usuario.getRol(),
-                    sitio, "Éxito", "Contraseña actualizada exitosamente",
-                    Evento.PASSWORD_RESET_COMPLETADO, ip);
+            emailLogService.notificarUsuarios(usuario, Evento.PASSWORD_RESET_EXITOSO, Date.from(Instant.now()), null);
+            loginLogService.registrarLogsUsuario(usuario, Evento.PASSWORD_RESET_COMPLETADO, Resultado.EXITO, sitio, ip, null);
+            accountBlockService.limpiarBloqueo(usuario, Evento.PASSWORD_RESET_FALLIDO);
 
             return true;
 
         } catch (Exception e) {
-            registrarLog("Desconocido", null, Rol.DESCONOCIDO, sitio,
-                    "Fallo", "Error al actualizar contraseña", Evento.PASSWORD_RESET_COMPLETADO, ip);
+            loginLogService.registrarLogsCorreo("Desconocido", Evento.PASSWORD_RESET_ERROR, Resultado.FALLO, sitio, ip, "1");
             return false;
         }
     }
 
-    // Metodo auxiliar para validar fuerza de contraseña
+    // Método auxiliar para validar fuerza de contraseña
     private boolean isPasswordStrong(String password) {
         if (password == null) return false;
-        // Al menos 8 caracteres, una mayúscula, una minuscula, un número, un símbolo
+        // Al menos 8 caracteres, una mayúscula, una minúscula, un número, un símbolo
         return password.matches("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");
-    }
-
-    private void registrarLog(String correo, Long idUsuario, Rol rol, Sitio sitio,
-                              String resultado, String descripcion, Evento tipoEvento, String ip) {
-        Login log = new Login();
-        log.setCorreo(correo != null ? correo : "Desconocido");
-        log.setIdUsuario(idUsuario);
-        log.setRol(rol != null ? rol : Rol.DESCONOCIDO);
-        log.setSitio(sitio != null ? sitio : Sitio.WEB);
-        log.setResultado(resultado);
-        log.setDescripcion(descripcion);
-        log.setTipoEvento(tipoEvento != null ? tipoEvento : Evento.PRUEBAS);
-        log.setFechaActividad(new Date());
-        log.setIp(ip);
-        loginRepository.save(log);
     }
 }

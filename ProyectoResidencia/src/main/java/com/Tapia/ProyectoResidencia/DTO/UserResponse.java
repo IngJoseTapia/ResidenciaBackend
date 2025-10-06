@@ -4,8 +4,8 @@ public record UserResponse(
         String nombre,
         String apellidoPaterno,
         String apellidoMaterno,
-        String email,
+        String correo,
         String telefono,
-        String genero
+        String genero,
+        boolean tieneContrasena // nuevo campo
 ) {}
-

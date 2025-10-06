@@ -136,4 +136,40 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN) // o 429 si quieres
                 .body(new ErrorResponse(ex.getMessage(), HttpStatus.FORBIDDEN.value()));
     }
+
+    @ExceptionHandler(MissingPasswordException.class)
+    public ResponseEntity<ErrorResponse> handleMissingPassword(MissingPasswordException ex) {
+        logger.log(Level.WARNING, "Usuario sin contraseña: {0}", ex.getMessage());
+        return ResponseEntity.badRequest()
+                .body(new ErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST.value()));
+    }
+
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleUserNotFound(UserNotFoundException ex) {
+        logger.log(Level.INFO, "Usuario no encontrado: {0}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND.value()));
+    }
+
+    @ExceptionHandler(InvalidPasswordException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidPassword(InvalidPasswordException ex) {
+        logger.log(Level.WARNING, "Contraseña inválida: {0}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST.value()));
+    }
+
+    @ExceptionHandler(WeakPasswordException.class)
+    public ResponseEntity<ErrorResponse> handleWeakPassword(WeakPasswordException ex) {
+        logger.log(Level.WARNING, "Contraseña débil: {0}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST.value()));
+    }
+
+    @ExceptionHandler(PasswordChangeException.class)
+    public ResponseEntity<ErrorResponse> handlePasswordChange(PasswordChangeException ex) {
+        logger.log(Level.SEVERE, "Error al cambiar contraseña: " + ex.getMessage(), ex);
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponse(ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR.value()));
+    }
 }

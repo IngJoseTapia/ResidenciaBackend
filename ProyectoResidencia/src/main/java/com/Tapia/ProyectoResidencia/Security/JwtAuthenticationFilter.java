@@ -1,11 +1,11 @@
 package com.Tapia.ProyectoResidencia.Security;
 
-import com.Tapia.ProyectoResidencia.Enum.Rol;
+import com.Tapia.ProyectoResidencia.Enum.Evento;
+import com.Tapia.ProyectoResidencia.Enum.Resultado;
 import com.Tapia.ProyectoResidencia.Enum.Sitio;
-import com.Tapia.ProyectoResidencia.Model.Login;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
-import com.Tapia.ProyectoResidencia.Repository.LoginRepository;
 import com.Tapia.ProyectoResidencia.Repository.UsuarioRepository;
+import com.Tapia.ProyectoResidencia.Service.LoginLogService;
 import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -21,22 +21,22 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Date;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final UserDetailsService userDetailsService;
-    private final LoginRepository loginRepository;
     private final UsuarioRepository usuarioRepository;
+    private final LoginLogService loginLogService;
 
     public JwtAuthenticationFilter(JwtUtil jwtUtil, UserDetailsService userDetailsService,
-                                   LoginRepository loginRepository, UsuarioRepository usuarioRepository) {
+                                   UsuarioRepository usuarioRepository,
+                                   LoginLogService loginLogService) {
         this.jwtUtil = jwtUtil;
         this.userDetailsService = userDetailsService;
-        this.loginRepository = loginRepository;
         this.usuarioRepository = usuarioRepository;
+        this.loginLogService = loginLogService;
     }
 
     @Override
@@ -54,6 +54,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             return;
         }
+
+        String ip = IpUtils.extractClientIp(request);
 
         final String authHeader = request.getHeader("Authorization");
 
@@ -84,7 +86,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                     SecurityContextHolder.getContext().setAuthentication(authenticationToken);
                 } else {
-                    registrarTokenFallido(request, "Token inválido o expirado");
+                    registrarTokenFallido(request, "Token inválido o expirado", ip);
                     response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token inválido o expirado");
                     return;
                 }
@@ -92,12 +94,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         } catch (ExpiredJwtException e) {
             logger.warn("Token expirado", e);
-            registrarTokenFallido(request, "Token expirado");
+            registrarTokenFallido(request, "Token expirado", ip);
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token expirado");
             return;
         } catch (Exception e) {
             logger.error("Error en autenticación JWT", e);
-            registrarTokenFallido(request, "JWT token inválido");
+            registrarTokenFallido(request, "JWT token inválido", ip);
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "JWT Token inválido");
             return;
         }
@@ -105,43 +107,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private void registrarTokenFallido(HttpServletRequest request, String descripcion) {
+    private void registrarTokenFallido(HttpServletRequest request, String descripcion, String ip) {
         String token = request.getHeader("Authorization");
         if (token != null && token.startsWith("Bearer ")) {
             token = token.substring(7);
         }
 
         String username;
-        Usuario usuario = null;
+        Usuario usuario;
         try {
             username = jwtUtil.extractUsername(token);
             usuario = usuarioRepository.findByCorreo(username).orElse(null);
+            loginLogService.registrarLogsUsuario(usuario, Evento.TOKEN_ERROR_INTERNO_VALIDACION, Resultado.FALLO, Sitio.WEB, ip, descripcion);
         } catch (Exception ignored) {
             username = "Desconocido";
+            loginLogService.registrarLogsCorreo(username, Evento.TOKEN_ERROR_INTERNO_VALIDACION, Resultado.FALLO, Sitio.WEB, ip, descripcion);
         }
-
-        registrarLogin(
-                usuario != null ? usuario.getCorreo() : "Desconocido",
-                usuario != null ? usuario.getId() : null,
-                usuario != null ? usuario.getRol() : Rol.DESCONOCIDO,
-                request.getRemoteAddr(),
-                Sitio.WEB,
-                "Fallo",
-                descripcion
-        );
-    }
-
-    private void registrarLogin(String correo, Long idUsuario, Rol rol, String ip, Sitio sitio,
-                                String resultado, String descripcion) {
-        Login log = new Login();
-        log.setCorreo(correo);
-        log.setIdUsuario(idUsuario);
-        log.setRol(rol);
-        log.setFechaActividad(new Date());
-        log.setIp(ip);
-        log.setSitio(sitio);
-        log.setResultado(resultado);
-        log.setDescripcion(descripcion);
-        loginRepository.save(log);
     }
 }

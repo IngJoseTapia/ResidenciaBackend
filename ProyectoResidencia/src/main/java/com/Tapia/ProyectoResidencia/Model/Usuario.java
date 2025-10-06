@@ -1,14 +1,11 @@
 package com.Tapia.ProyectoResidencia.Model;
 
-import com.Tapia.ProyectoResidencia.Enum.Rol;
-import com.Tapia.ProyectoResidencia.Enum.Status;
+import com.Tapia.ProyectoResidencia.Enum.*;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 
 @Data
 @Entity
@@ -63,9 +60,12 @@ public class Usuario {
     @Temporal(TemporalType.TIMESTAMP)
     private Date fechaRegistro; //Fecha en que se dio de alta la cuenta del usuario
 
-    private int intentosFallidos; //Contador de intentos de acceso con contraseña incorrecta o cuenta no registrada
-    private Date cuentaBloqueadaHasta; // null si no está bloqueado
-
     @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PasswordResetToken> passwordResetTokens = new ArrayList<>();
+
+    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<NotificacionUsuario> notificacionesRecibidas = new ArrayList<>();
+
+    @OneToMany(mappedBy = "emisor")
+    private List<Notification> notificacionesEnviadas = new ArrayList<>();
 }
