@@ -1,7 +1,8 @@
-package com.Tapia.ProyectoResidencia.Security;
+package com.Tapia.ProyectoResidencia.Service;
 
 import com.Tapia.ProyectoResidencia.Model.Usuario;
 import com.Tapia.ProyectoResidencia.Repository.UsuarioRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -9,13 +10,10 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class DetailService implements UserDetailsService {
 
     private final UsuarioRepository usuarioRepository;
-
-    public DetailService(UsuarioRepository usuarioRepository) {
-        this.usuarioRepository = usuarioRepository;
-    }
 
     @Override
     public UserDetails loadUserByUsername(String correo) throws UsernameNotFoundException {

@@ -1,4 +1,7 @@
 package com.Tapia.ProyectoResidencia.DTO;
 
-public record ApiResponse(String status, String message) {}
+public record ApiResponse(
+        String status,
+        String message
+) {}
 

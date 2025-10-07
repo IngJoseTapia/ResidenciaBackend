@@ -39,6 +39,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/user/**").hasAnyRole("VOCAL", "CAE", "SE", "USER")
+                        .requestMatchers("/notifications/**").hasAnyRole("VOCAL", "CAE", "SE", "USER")
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

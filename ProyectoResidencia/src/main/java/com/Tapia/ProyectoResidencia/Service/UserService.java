@@ -4,10 +4,14 @@ import com.Tapia.ProyectoResidencia.DTO.ChangePasswordRequest;
 import com.Tapia.ProyectoResidencia.DTO.UpdateUserRequest;
 import com.Tapia.ProyectoResidencia.DTO.UserResponse;
 import com.Tapia.ProyectoResidencia.Enum.Evento;
+import com.Tapia.ProyectoResidencia.Enum.NotificationTemplate;
 import com.Tapia.ProyectoResidencia.Enum.Resultado;
 import com.Tapia.ProyectoResidencia.Enum.Sitio;
 import com.Tapia.ProyectoResidencia.Exception.*;
+import com.Tapia.ProyectoResidencia.Model.Usuario;
 import com.Tapia.ProyectoResidencia.Repository.UsuarioRepository;
+import com.Tapia.ProyectoResidencia.Utils.PasswordUtils;
+import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -17,6 +21,7 @@ import java.time.Instant;
 import java.util.Date;
 
 @Service
+@RequiredArgsConstructor
 public class UserService {
 
     private final UsuarioRepository userRepository;
@@ -25,15 +30,7 @@ public class UserService {
     private final AccountBlockService  accountBlockService;
     private final SystemLogService systemLogService;
     private final IpBlockService ipBlockService;
-
-    public UserService(UsuarioRepository userRepository, PasswordEncoder passwordEncoder, EmailLogService emailLogService, AccountBlockService accountBlockService, SystemLogService systemLogService, IpBlockService ipBlockService) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.emailLogService = emailLogService;
-        this.accountBlockService = accountBlockService;
-        this.systemLogService = systemLogService;
-        this.ipBlockService = ipBlockService;
-    }
+    private final NotificacionService notificacionService;
 
     public UserResponse getUserByCorreo(String correo) {
         var user = userRepository.findByCorreo(correo)
@@ -42,6 +39,12 @@ public class UserService {
         boolean tieneContrasena = user.getContrasena() != null
                 && !user.getContrasena().isBlank()
                 && !user.getContrasena().startsWith("AUTO_");
+
+        if(!tieneContrasena) {
+            if (!notificacionService.existeNotificacionUsuario(user, NotificationTemplate.GENERAR_CONTRASENA)) {
+                notificacionService.createNotificationSystem(user, NotificationTemplate.GENERAR_CONTRASENA);
+            }
+        }
 
         return new UserResponse(
                 user.getNombre(),
@@ -52,6 +55,11 @@ public class UserService {
                 user.getGenero(),
                 tieneContrasena // enviar al frontend
         );
+    }
+
+    public Usuario getUsuarioEntityByCorreo(String correo) {
+        return userRepository.findByCorreo(correo)
+                .orElseThrow(() -> new UserNotFoundException("Usuario no encontrado"));
     }
 
     public void updateUser(String correo, UpdateUserRequest request, String ip) {
@@ -159,7 +167,7 @@ public class UserService {
             }
 
             // ✅ Validar fuerza de contraseña (mismo criterio que en AuthService)
-            if (!isPasswordStrong(request.nuevaPassword())) {
+            if (PasswordUtils.isWeakPassword(request.nuevaPassword())) {
                 systemLogService.registrarLogUsuario(user, Evento.PASSWORD_CHANGE_FALLIDO, Resultado.FALLO, sitio, ip, "6");
                 throw new WeakPasswordException("La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula, un número y un carácter especial.");
             }
@@ -183,6 +191,9 @@ public class UserService {
             accountBlockService.limpiarBloqueo(user, Evento.PASSWORD_CHANGE_RECHAZADO);
             accountBlockService.registrarCambioPasswordExitoso(user, Evento.PASSWORD_CHANGE_EXITOSO, ip);
             ipBlockService.limpiarIntentos(ip);
+            notificacionService.marcarNotificacionResuelta(user, NotificationTemplate.GENERAR_CONTRASENA);
+            if(notificacionService.existeNotificacionUsuario(user, NotificationTemplate.GENERAR_CONTRASENA))
+                notificacionService.eliminarNotificacionesPorTemplate(user, NotificationTemplate.GENERAR_CONTRASENA);
         } catch (Exception e) {
             if (e instanceof InvalidPasswordException || e instanceof WeakPasswordException) {
                 throw e; // deja que siga al handler global
@@ -194,12 +205,5 @@ public class UserService {
                     e
             );
         }
-    }
-
-    // Método auxiliar para validar fuerza de contraseña
-    private boolean isPasswordStrong(String password) {
-        if (password == null) return false;
-        // Al menos 8 caracteres, una mayúscula, una minúscula, un número, un símbolo
-        return password.matches("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");
     }
 }

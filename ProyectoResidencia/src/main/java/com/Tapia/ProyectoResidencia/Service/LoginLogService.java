@@ -4,19 +4,17 @@ import com.Tapia.ProyectoResidencia.Enum.*;
 import com.Tapia.ProyectoResidencia.Model.LoginLog;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
 import com.Tapia.ProyectoResidencia.Repository.LoginLogRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.Date;
 
 @Service
+@RequiredArgsConstructor
 public class LoginLogService {
 
     private final LoginLogRepository loginLogRepository;
-
-    public LoginLogService(LoginLogRepository loginLogRepository) {
-        this.loginLogRepository = loginLogRepository;
-    }
 
     public void registrarLogsUsuario(Usuario usuario, Evento evento, Resultado resultado, Sitio sitio, String ip, String id) {
         String descripcion;

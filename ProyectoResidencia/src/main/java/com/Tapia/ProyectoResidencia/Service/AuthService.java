@@ -10,7 +10,9 @@ import com.Tapia.ProyectoResidencia.Model.PasswordResetToken;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
 import com.Tapia.ProyectoResidencia.Repository.PasswordResetTokenRepository;
 import com.Tapia.ProyectoResidencia.Repository.UsuarioRepository;
-import com.Tapia.ProyectoResidencia.Security.JwtUtil;
+import com.Tapia.ProyectoResidencia.Utils.JwtUtils;
+import com.Tapia.ProyectoResidencia.Utils.PasswordUtils;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -24,40 +26,19 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 @Service
+@RequiredArgsConstructor
 public class AuthService {
 
     private final UsuarioRepository usuarioRepository;
-    //private final LoginRepository loginRepository;
     private final PasswordResetTokenRepository tokenRepository;
     private final EmailLogService emailLogService;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
-    private final JwtUtil jwtUtil;
+    private final JwtUtils jwtUtils;
     private final AccountBlockService accountBlockService;
     private final IpBlockService ipBlockService;
     private final LoginLogService loginLogService;
-
-    public AuthService(UsuarioRepository usuarioRepository,
-                       //LoginRepository loginRepository,
-                       PasswordResetTokenRepository tokenRepository,
-                       EmailLogService emailLogService,
-                       PasswordEncoder passwordEncoder,
-                       AuthenticationManager authenticationManager,
-                       JwtUtil jwtUtil,
-                       AccountBlockService accountBlockService,
-                       IpBlockService ipBlockService,
-                       LoginLogService loginLogService) {
-        this.usuarioRepository = usuarioRepository;
-        //this.loginRepository = loginRepository;
-        this.tokenRepository = tokenRepository;
-        this.emailLogService = emailLogService;
-        this.passwordEncoder = passwordEncoder;
-        this.authenticationManager = authenticationManager;
-        this.jwtUtil = jwtUtil;
-        this.accountBlockService = accountBlockService;
-        this.ipBlockService = ipBlockService;
-        this.loginLogService = loginLogService;
-    }
+    private final NotificacionService notificacionService;
 
     public String register(RegisterRequest request, String ip) {
         // 1. Validaciones de negocio mínimas
@@ -141,8 +122,8 @@ public class AuthService {
             accountBlockService.limpiarBloqueo(usuario, Evento.LOGIN_FALLIDO);
             ipBlockService.limpiarIntentos(ip);
 
-            String jwt = jwtUtil.generateToken(usuario);
-            String refreshToken = jwtUtil.generateRefreshToken(usuario);
+            String jwt = jwtUtils.generateToken(usuario);
+            String refreshToken = jwtUtils.generateRefreshToken(usuario);
 
             // Registrar log de éxito
             loginLogService.registrarLogsUsuario(usuario, Evento.LOGIN_EXITOSO, Resultado.EXITO, sitio, ip, null);
@@ -191,6 +172,8 @@ public class AuthService {
             emailLogService.notificarUsuarios(u, Evento.USER_REGISTRADO_GOOGLE, Date.from(Instant.now()), null);
             loginLogService.registrarLogsUsuario(u, Evento.USER_REGISTRADO_GOOGLE, Resultado.EXITO, sitio, ip, null);
 
+            notificacionService.createNotificationSystem(u, NotificationTemplate.GENERAR_CONTRASENA);
+
             return u;
         });
 
@@ -204,8 +187,8 @@ public class AuthService {
         }
 
         // 4. Generar tokens
-        String jwt = jwtUtil.generateToken(usuario);
-        String refreshToken = jwtUtil.generateRefreshToken(usuario);
+        String jwt = jwtUtils.generateToken(usuario);
+        String refreshToken = jwtUtils.generateRefreshToken(usuario);
 
         // 5. Registrar login con Google (éxito)
         loginLogService.registrarLogsUsuario(usuario, Evento.LOGIN_GOOGLE_EXITOSO, Resultado.EXITO, sitio, ip, null);
@@ -220,7 +203,7 @@ public class AuthService {
 
         String username;
         try {
-            username = jwtUtil.extractUsername(refreshToken);
+            username = jwtUtils.extractUsername(refreshToken);
         } catch (Exception e) {
             loginLogService.registrarLogsCorreo("Desconocido", Evento.REFRESH_TOKEN_FALLIDO, Resultado.FALLO, sitio, ip, null);
             throw new SecurityException("Refresh token inválido");
@@ -229,14 +212,14 @@ public class AuthService {
         Usuario usuario = usuarioRepository.findByCorreo(username)
                 .orElseThrow(() -> new NoSuchElementException("Usuario no encontrado"));
 
-        if (!jwtUtil.isRefreshTokenValid(refreshToken, username)) {
-            String descripcion = jwtUtil.extractClaims(refreshToken).getExpiration().before(new Date()) ?
+        if (!jwtUtils.isRefreshTokenValid(refreshToken, username)) {
+            String descripcion = jwtUtils.extractClaims(refreshToken).getExpiration().before(new Date()) ?
                     "Refresh token expirado" : "Refresh token inválido";
             loginLogService.registrarLogsUsuario(usuario, Evento.REFRESH_TOKEN_FALLIDO, Resultado.FALLO, sitio, ip, descripcion);
             throw new SecurityException("Refresh token inválido o expirado. Se requiere iniciar sesión nuevamente.");
         }
 
-        String newJwt = jwtUtil.generateToken(usuario);
+        String newJwt = jwtUtils.generateToken(usuario);
 
         // Registrar éxito de refresh
         loginLogService.registrarLogsUsuario(usuario, Evento.REFRESH_TOKEN_EXITOSO, Resultado.EXITO, sitio, ip, null);
@@ -363,7 +346,7 @@ public class AuthService {
             Usuario usuario = verifyResetToken(token, sitio, ip);
 
             // --- Validación de fuerza de contraseña ---
-            if (!isPasswordStrong(newPassword)) {
+            if (PasswordUtils.isWeakPassword(newPassword)) {
                 loginLogService.registrarLogsUsuario(usuario, Evento.PASSWORD_RESET_RECHAZADO, Resultado.FALLO, sitio, ip, null);
                 return false;
             }
@@ -386,12 +369,5 @@ public class AuthService {
             loginLogService.registrarLogsCorreo("Desconocido", Evento.PASSWORD_RESET_ERROR, Resultado.FALLO, sitio, ip, "1");
             return false;
         }
-    }
-
-    // Método auxiliar para validar fuerza de contraseña
-    private boolean isPasswordStrong(String password) {
-        if (password == null) return false;
-        // Al menos 8 caracteres, una mayúscula, una minúscula, un número, un símbolo
-        return password.matches("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");
     }
 }

@@ -4,6 +4,7 @@ import com.Tapia.ProyectoResidencia.Enum.Evento;
 import com.Tapia.ProyectoResidencia.Model.AccountBlock;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
 import com.Tapia.ProyectoResidencia.Repository.AccountBlockRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -11,6 +12,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Date;
 
 @Service
+@RequiredArgsConstructor
 public class AccountBlockService {
 
     private final AccountBlockRepository accountBlockRepository;
@@ -24,11 +26,6 @@ public class AccountBlockService {
     private static final int MAX_CAMBIOS_PASSWORD = 2;              // máx. 2 cambios en 24h
     private static final int VENTANA_HORAS = 24;                    // ventana de control
     private static final int BLOQUEO_MINUTOS = 15;                  // tiempo estándar de bloqueo
-
-    public AccountBlockService(AccountBlockRepository accountBlockRepository,  EmailLogService emailLogService) {
-        this.accountBlockRepository = accountBlockRepository;
-        this.emailLogService = emailLogService;
-    }
 
     //Verifica si el usuario está actualmente bloqueado
     public boolean estaBloqueada(Usuario usuario, Evento evento) {

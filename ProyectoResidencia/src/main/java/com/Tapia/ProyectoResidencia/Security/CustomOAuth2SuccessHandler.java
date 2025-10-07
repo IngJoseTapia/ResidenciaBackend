@@ -4,6 +4,7 @@ import com.Tapia.ProyectoResidencia.DTO.AuthResponse;
 import com.Tapia.ProyectoResidencia.Enum.Sitio;
 import com.Tapia.ProyectoResidencia.Exception.BloqueoException;
 import com.Tapia.ProyectoResidencia.Service.AuthService;
+import com.Tapia.ProyectoResidencia.Utils.IpUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Lazy;

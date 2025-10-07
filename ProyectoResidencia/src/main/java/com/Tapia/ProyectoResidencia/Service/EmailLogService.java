@@ -4,6 +4,7 @@ import com.Tapia.ProyectoResidencia.Enum.Evento;
 import com.Tapia.ProyectoResidencia.Model.EmailLog;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
 import com.Tapia.ProyectoResidencia.Repository.EmailLogRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -17,6 +18,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 @Service
+@RequiredArgsConstructor
 public class EmailLogService {
 
     private final JavaMailSender mailSender;
@@ -25,11 +27,6 @@ public class EmailLogService {
     private String adminEmails;
     private final EmailLogRepository emailLogRepository;
     private static final Logger logger = Logger.getLogger(EmailLogService.class.getName());
-
-    public EmailLogService(JavaMailSender mailSender, EmailLogRepository emailLogRepository) {
-        this.mailSender = mailSender;
-        this.emailLogRepository = emailLogRepository;
-    }
 
     public void notificarAdministradores(Usuario usuario, Evento evento, Date desbloqueo, String ip){
         String asunto;

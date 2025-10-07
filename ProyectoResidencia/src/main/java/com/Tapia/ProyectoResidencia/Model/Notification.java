@@ -1,5 +1,6 @@
 package com.Tapia.ProyectoResidencia.Model;
 
+import com.Tapia.ProyectoResidencia.Enum.NotificationTemplate;
 import com.Tapia.ProyectoResidencia.Enum.Rol;
 import com.Tapia.ProyectoResidencia.Enum.TipoNotificacion;
 import jakarta.persistence.*;
@@ -26,6 +27,9 @@ public class Notification {
 
     @Column(nullable = false, length = 500)
     private String mensaje;
+
+    @Enumerated(EnumType.STRING)
+    private NotificationTemplate template; // <-- NUEVO
 
     @ManyToOne
     @JoinColumn(name = "emisor_id")

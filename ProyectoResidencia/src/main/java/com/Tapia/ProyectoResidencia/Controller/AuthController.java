@@ -2,10 +2,11 @@ package com.Tapia.ProyectoResidencia.Controller;
 
 import com.Tapia.ProyectoResidencia.DTO.*;
 import com.Tapia.ProyectoResidencia.Enum.Sitio;
-import com.Tapia.ProyectoResidencia.Security.IpUtils;
+import com.Tapia.ProyectoResidencia.Utils.IpUtils;
 import com.Tapia.ProyectoResidencia.Service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,13 +14,10 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
+@RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
-
-    public AuthController(AuthService authService) {
-        this.authService = authService;
-    }
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse> register(@Valid @RequestBody RegisterRequest request,

@@ -6,6 +6,8 @@ import com.Tapia.ProyectoResidencia.Enum.Sitio;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
 import com.Tapia.ProyectoResidencia.Repository.UsuarioRepository;
 import com.Tapia.ProyectoResidencia.Service.LoginLogService;
+import com.Tapia.ProyectoResidencia.Utils.IpUtils;
+import com.Tapia.ProyectoResidencia.Utils.JwtUtils;
 import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -25,15 +27,15 @@ import java.io.IOException;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private final JwtUtil jwtUtil;
+    private final JwtUtils jwtUtils;
     private final UserDetailsService userDetailsService;
     private final UsuarioRepository usuarioRepository;
     private final LoginLogService loginLogService;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil, UserDetailsService userDetailsService,
+    public JwtAuthenticationFilter(JwtUtils jwtUtils, UserDetailsService userDetailsService,
                                    UsuarioRepository usuarioRepository,
                                    LoginLogService loginLogService) {
-        this.jwtUtil = jwtUtil;
+        this.jwtUtils = jwtUtils;
         this.userDetailsService = userDetailsService;
         this.usuarioRepository = usuarioRepository;
         this.loginLogService = loginLogService;
@@ -67,12 +69,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String token = authHeader.substring(7);
 
         try {
-            final String username = jwtUtil.extractUsername(token);
+            final String username = jwtUtils.extractUsername(token);
 
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
-                if (jwtUtil.isTokenValid(token, username)) {
+                if (jwtUtils.isTokenValid(token, username)) {
                     UsernamePasswordAuthenticationToken authenticationToken =
                             new UsernamePasswordAuthenticationToken(
                                     userDetails,
@@ -116,7 +118,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String username;
         Usuario usuario;
         try {
-            username = jwtUtil.extractUsername(token);
+            username = jwtUtils.extractUsername(token);
             usuario = usuarioRepository.findByCorreo(username).orElse(null);
             loginLogService.registrarLogsUsuario(usuario, Evento.TOKEN_ERROR_INTERNO_VALIDACION, Resultado.FALLO, Sitio.WEB, ip, descripcion);
         } catch (Exception ignored) {

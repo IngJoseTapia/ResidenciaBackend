@@ -27,5 +27,8 @@ public class NotificacionUsuario {
     @Column(nullable = false)
     private boolean leida = false;
 
+    @Column(nullable = false)
+    private boolean resuelta = false;
+
     private LocalDateTime fechaLectura;
 }

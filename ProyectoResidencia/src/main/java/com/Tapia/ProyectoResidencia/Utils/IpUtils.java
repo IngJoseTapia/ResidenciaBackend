@@ -1,4 +1,4 @@
-package com.Tapia.ProyectoResidencia.Security;
+package com.Tapia.ProyectoResidencia.Utils;
 
 import jakarta.servlet.http.HttpServletRequest;
 

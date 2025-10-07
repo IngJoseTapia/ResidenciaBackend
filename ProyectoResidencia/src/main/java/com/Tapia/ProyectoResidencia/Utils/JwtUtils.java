@@ -1,4 +1,4 @@
-package com.Tapia.ProyectoResidencia.Security;
+package com.Tapia.ProyectoResidencia.Utils;
 
 import com.Tapia.ProyectoResidencia.Model.Usuario;
 import io.jsonwebtoken.Claims;
@@ -12,13 +12,13 @@ import java.security.Key;
 import java.util.Date;
 
 @Component
-public class JwtUtil {
+public class JwtUtils {
 
     private final Key signingKey;
     private final long expirationTime;
     private final long expirationTimeRefresh;
 
-    public JwtUtil(
+    public JwtUtils(
             @Value("${jwt.secret}") String secret,
             @Value("${jwt.expiration}") long expirationTime,
             @Value("${jwt.expirationRefresh}") long expirationTimeRefresh) {
@@ -65,18 +65,18 @@ public class JwtUtil {
     }
 
     public boolean isTokenValid(String token, String username) {
-        return (username.equals(extractUsername(token)) && !isTokenExpired(token));
+        return username.equals(extractUsername(token)) && isTokenNotExpired(token);
     }
 
     public boolean isRefreshTokenValid(String token, String username) {
         try {
-            return username.equals(extractUsername(token)) && !isTokenExpired(token);
+            return username.equals(extractUsername(token)) && isTokenNotExpired(token);
         } catch (Exception e) {
             return false;
         }
     }
 
-    private boolean isTokenExpired(String token) {
-        return extractClaims(token).getExpiration().before(new Date());
+    private boolean isTokenNotExpired(String token) {
+        return extractClaims(token).getExpiration().after(new Date());
     }
 }
