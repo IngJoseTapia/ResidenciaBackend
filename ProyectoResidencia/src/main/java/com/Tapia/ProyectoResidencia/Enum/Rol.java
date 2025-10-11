@@ -5,5 +5,6 @@ public enum Rol {
     CAE,
     SE,
     USER,
+    ADMIN,
     DESCONOCIDO
 }

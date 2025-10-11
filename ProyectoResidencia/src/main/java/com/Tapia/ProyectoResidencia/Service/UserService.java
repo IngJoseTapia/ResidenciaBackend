@@ -9,13 +9,14 @@ import com.Tapia.ProyectoResidencia.Enum.Resultado;
 import com.Tapia.ProyectoResidencia.Enum.Sitio;
 import com.Tapia.ProyectoResidencia.Exception.*;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
-import com.Tapia.ProyectoResidencia.Repository.UsuarioRepository;
 import com.Tapia.ProyectoResidencia.Utils.PasswordUtils;
+import jakarta.validation.ConstraintViolationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionSystemException;
 
 import java.time.Instant;
 import java.util.Date;
@@ -24,21 +25,18 @@ import java.util.Date;
 @RequiredArgsConstructor
 public class UserService {
 
-    private final UsuarioRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailLogService emailLogService;
     private final AccountBlockService  accountBlockService;
     private final SystemLogService systemLogService;
     private final IpBlockService ipBlockService;
     private final NotificacionService notificacionService;
+    private final UsuarioService usuarioService;
 
     public UserResponse getUserByCorreo(String correo) {
-        var user = userRepository.findByCorreo(correo)
-                .orElseThrow(() -> new UserNotFoundException("Usuario no encontrado"));
+        Usuario user = usuarioService.getUsuarioEntityByCorreo(correo);
 
-        boolean tieneContrasena = user.getContrasena() != null
-                && !user.getContrasena().isBlank()
-                && !user.getContrasena().startsWith("AUTO_");
+        boolean tieneContrasena = user.getContrasena() != null && !user.getContrasena().isBlank() && !user.getContrasena().startsWith("AUTO_");
 
         if(!tieneContrasena) {
             if (!notificacionService.existeNotificacionUsuario(user, NotificationTemplate.GENERAR_CONTRASENA)) {
@@ -53,66 +51,49 @@ public class UserService {
                 user.getCorreo(),
                 user.getTelefono(),
                 user.getGenero(),
+                user.getRol(),
                 tieneContrasena // enviar al frontend
         );
     }
 
-    public Usuario getUsuarioEntityByCorreo(String correo) {
-        return userRepository.findByCorreo(correo)
-                .orElseThrow(() -> new UserNotFoundException("Usuario no encontrado"));
-    }
-
     public void updateUser(String correo, UpdateUserRequest request, String ip) {
-        var user = userRepository.findByCorreo(correo)
-                .orElseThrow(() -> new UserNotFoundException("Usuario no encontrado"));
+        Usuario user = usuarioService.getUsuarioEntityByCorreo(correo);
 
         // Validación especial para usuarios sin contraseña (login Google)
-        if (user.getContrasena() == null
-                || user.getContrasena().isBlank()
-                || user.getContrasena().startsWith("AUTO_")) {
-            throw new MissingPasswordException(
-                    "Debes generar una contraseña primero para poder actualizar tu información personal."
-            );
+        if (user.getContrasena() == null || user.getContrasena().isBlank() || user.getContrasena().startsWith("AUTO_")) {
+            throw new MissingPasswordException("Debes generar una contraseña primero para poder actualizar tu información personal.");
         }
 
         try {
-            // Actualización de datos
-            user.setNombre(request.nombre());
-            user.setApellidoPaterno(request.apellidoPaterno());
-            user.setApellidoMaterno(request.apellidoMaterno());
-            user.setGenero(request.genero());
-            user.setTelefono(request.telefono());
-
-            userRepository.save(user);
+            Usuario usuario = usuarioService.actualizarUsuario(user, request);
             systemLogService.registrarLogUsuario(
-                    user, Evento.UPDATE_INFO_USUARIO_EXITOSO, Resultado.EXITO, Sitio.WEB, ip, null
+                    usuario, Evento.UPDATE_INFO_USUARIO_EXITOSO, Resultado.EXITO, Sitio.WEB, ip, null
             );
         } catch (DataIntegrityViolationException e) {
             systemLogService.registrarLogUsuario(
                     user, Evento.UPDATE_INFO_USUARIO_FALLIDO, Resultado.FALLO, Sitio.WEB, ip,
                     "Violación de integridad en la BD: " + e.getMostSpecificCause().getMessage()
             );
-            throw new RuntimeException("Error de integridad de datos al actualizar usuario", e);
+            throw e;
 
         } catch (OptimisticLockingFailureException e) {
             systemLogService.registrarLogUsuario(
                     user, Evento.UPDATE_INFO_USUARIO_FALLIDO, Resultado.FALLO, Sitio.WEB, ip,
                     "Conflicto de concurrencia al actualizar usuario"
             );
-            throw new RuntimeException("El usuario fue actualizado por otro proceso. Intente de nuevo.", e);
-
-        } catch (Exception e) {
-            systemLogService.registrarLogUsuario(
-                    user, Evento.UPDATE_INFO_USUARIO_FALLIDO, Resultado.FALLO, Sitio.WEB, ip,
-                    "Error inesperado: " + e.getMessage()
-            );
-            throw new RuntimeException("Error inesperado al actualizar usuario", e);
+            throw e;
+        } catch (TransactionSystemException e) {
+            // ✅ Extraer ConstraintViolationException si existe
+            Throwable t = e.getRootCause();
+            if (t instanceof ConstraintViolationException cve) {
+                throw cve; // lo dejamos llegar limpio al GlobalExceptionHandler
+            }
+            throw e; // otro error de transacción
         }
     }
 
     public void changePassword(String correo, ChangePasswordRequest request, Sitio sitio, String ip) {
-        var user = userRepository.findByCorreo(correo)
-                .orElseThrow(() -> new UserNotFoundException("Usuario no encontrado"));
+        Usuario user = usuarioService.getUsuarioEntityByCorreo(correo);
 
         if (ipBlockService.estaBloqueada(ip)) {
             systemLogService.registrarLogUsuario(user, Evento.PASSWORD_CHANGE_FALLIDO, Resultado.FALLO, sitio, ip, "0");
@@ -174,13 +155,11 @@ public class UserService {
 
             if (user.getContrasena().startsWith("AUTO_")){
                 // Guardar nueva contraseña por primera vez
-                user.setContrasena(passwordEncoder.encode(request.nuevaPassword()));
-                userRepository.save(user);
+                usuarioService.actualizarContrasena(user, request);
                 systemLogService.registrarLogUsuario(user, Evento.PASSWORD_CHANGE_PRIMERA_VEZ, Resultado.EXITO, sitio, ip, null);
             } else {
                 // Guardar nueva contraseña
-                user.setContrasena(passwordEncoder.encode(request.nuevaPassword()));
-                userRepository.save(user);
+                usuarioService.actualizarContrasena(user, request);
                 systemLogService.registrarLogUsuario(user, Evento.PASSWORD_CHANGE_EXITOSO, Resultado.EXITO, sitio, ip, null);
             }
 

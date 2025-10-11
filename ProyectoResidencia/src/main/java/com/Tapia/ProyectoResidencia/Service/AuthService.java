@@ -5,39 +5,32 @@ import com.Tapia.ProyectoResidencia.DTO.RegisterRequest;
 import com.Tapia.ProyectoResidencia.DTO.AuthResponse;
 import com.Tapia.ProyectoResidencia.Enum.*;
 import com.Tapia.ProyectoResidencia.Exception.BloqueoException;
-import com.Tapia.ProyectoResidencia.Model.LoginLog;
 import com.Tapia.ProyectoResidencia.Model.PasswordResetToken;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
-import com.Tapia.ProyectoResidencia.Repository.PasswordResetTokenRepository;
-import com.Tapia.ProyectoResidencia.Repository.UsuarioRepository;
 import com.Tapia.ProyectoResidencia.Utils.JwtUtils;
 import com.Tapia.ProyectoResidencia.Utils.PasswordUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
-    private final UsuarioRepository usuarioRepository;
-    private final PasswordResetTokenRepository tokenRepository;
     private final EmailLogService emailLogService;
-    private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtUtils jwtUtils;
     private final AccountBlockService accountBlockService;
     private final IpBlockService ipBlockService;
     private final LoginLogService loginLogService;
+    private final UsuarioService usuarioService;
+    private final TokenService tokenService;
     private final NotificacionService notificacionService;
 
     public String register(RegisterRequest request, String ip) {
@@ -46,26 +39,12 @@ public class AuthService {
             throw new IllegalArgumentException("Las contraseñas no coinciden");
         }
 
-        if (usuarioRepository.existsByCorreo(request.email())) {
+        if (usuarioService.existeUsuarioByCorreo(request.email())) {
             throw new IllegalArgumentException("El correo ya está registrado");
         }
 
-        // 2. Mapear DTO a entidad Usuario
-        Usuario usuario = new Usuario();
-        usuario.setCorreo(request.email());
-        usuario.setContrasena(passwordEncoder.encode(request.password()));
-        usuario.setNombre(request.nombre());
-        usuario.setApellidoPaterno(request.apellidoPaterno());
-        usuario.setApellidoMaterno(request.apellidoMaterno());
-        usuario.setGenero(request.genero());
-        usuario.setTelefono(request.telefono());
-        usuario.setRol(Rol.USER);
-        usuario.setStatus(Status.PENDIENTE); // Registro híbrido: requiere aprobación
-        usuario.setFechaRegistro(new Date());
-
-        // 3. Guardar en la base de datos
-        // Si algún campo viola las validaciones del modelo, Hibernate lanzará ConstraintViolationException
-        usuarioRepository.save(usuario);
+        //2. Mapear y registrar usuario en la base de datos
+        Usuario usuario = usuarioService.registrarUsuario(request.email(),request.password(),request.nombre(),request.apellidoPaterno(),request.apellidoMaterno(),request.genero(),request.telefono());
 
         // Registrar log de registro (opcional)
         loginLogService.registrarLogsUsuario(usuario, Evento.USER_REGISTRADO, Resultado.EXITO, Sitio.WEB, ip, "1");
@@ -78,11 +57,6 @@ public class AuthService {
 
     public AuthResponse login(LoginRequest request, Sitio sitio, String ip) {
         Usuario usuario = null;
-        LoginLog loginLog = new LoginLog();
-        loginLog.setCorreo(request.email());
-        loginLog.setFechaActividad(new Date());
-        loginLog.setSitio(sitio);
-        loginLog.setIp(ip);
 
         try {
             // 0. Revisar bloqueo por IP
@@ -92,7 +66,7 @@ public class AuthService {
             }
 
             // 1. Verificar si el correo existe en la BD
-            Optional<Usuario> usuarioOpt = usuarioRepository.findByCorreo(request.email());
+            Optional<Usuario> usuarioOpt = usuarioService.buscarUsuarioByCorreo(request.email());
             if (usuarioOpt.isEmpty()) {
                 // incrementar contador por IP
                 ipBlockService.registrarIntentoFallido(ip);
@@ -101,8 +75,6 @@ public class AuthService {
             }
 
             usuario = usuarioOpt.get();
-            loginLog.setIdUsuario(usuario.getId());
-            loginLog.setRol(usuario.getRol());
 
             // 2. Revisar bloqueo por cuenta
             if (accountBlockService.estaBloqueada(usuario, Evento.LOGIN_FALLIDO)) {
@@ -128,7 +100,7 @@ public class AuthService {
             // Registrar log de éxito
             loginLogService.registrarLogsUsuario(usuario, Evento.LOGIN_EXITOSO, Resultado.EXITO, sitio, ip, null);
 
-            return new AuthResponse(jwt, refreshToken);
+            return new AuthResponse(jwt, refreshToken, usuario.getRol());
         } catch (BadCredentialsException e) {
             //  Contraseña incorrecta
             if (usuario != null) {
@@ -153,29 +125,15 @@ public class AuthService {
             throw new IllegalArgumentException("El correo proporcionado por Google no es válido");
         }
 
-        // 2. Buscar o crear usuario
-        Usuario usuario = usuarioRepository.findByCorreo(correo).orElseGet(() -> {
-            Usuario u = new Usuario();
-            u.setCorreo(correo);
-            u.setNombre(nombre != null ? nombre : "Usuario Google");
-            u.setApellidoPaterno("N/A");
-            u.setApellidoMaterno("N/A");
-            u.setGenero("Otro");
-            u.setTelefono("0000000000");
-            u.setRol(Rol.USER);
-            u.setStatus(Status.PENDIENTE);
-            u.setFechaRegistro(new Date());
-            String randomPassword = "AUTO_" + UUID.randomUUID();
-            u.setContrasena(randomPassword); // sin encode
-            usuarioRepository.save(u);
+        if(!usuarioService.existeUsuarioByCorreo(correo)) {
+            Usuario usuario = usuarioService.registrarUsuarioGoogle(correo, nombre);
 
-            emailLogService.notificarUsuarios(u, Evento.USER_REGISTRADO_GOOGLE, Date.from(Instant.now()), null);
-            loginLogService.registrarLogsUsuario(u, Evento.USER_REGISTRADO_GOOGLE, Resultado.EXITO, sitio, ip, null);
+            emailLogService.notificarUsuarios(usuario, Evento.USER_REGISTRADO_GOOGLE, Date.from(Instant.now()), null);
+            loginLogService.registrarLogsUsuario(usuario, Evento.USER_REGISTRADO_GOOGLE, Resultado.EXITO, sitio, ip, null);
+            notificacionService.createNotificationSystem(usuario, NotificationTemplate.GENERAR_CONTRASENA);
+        }
 
-            notificacionService.createNotificationSystem(u, NotificationTemplate.GENERAR_CONTRASENA);
-
-            return u;
-        });
+        Usuario usuario = usuarioService.getUsuarioEntityByCorreo(correo);
 
         // 3. Revisar bloqueo por cuenta
         if (accountBlockService.estaBloqueada(usuario, Evento.LOGIN_FALLIDO)) {
@@ -193,7 +151,7 @@ public class AuthService {
         // 5. Registrar login con Google (éxito)
         loginLogService.registrarLogsUsuario(usuario, Evento.LOGIN_GOOGLE_EXITOSO, Resultado.EXITO, sitio, ip, null);
 
-        return new AuthResponse(jwt, refreshToken);
+        return new AuthResponse(jwt, refreshToken, usuario.getRol());
     }
 
     public AuthResponse refreshToken(String refreshToken, Sitio sitio, String ip) {
@@ -209,7 +167,7 @@ public class AuthService {
             throw new SecurityException("Refresh token inválido");
         }
 
-        Usuario usuario = usuarioRepository.findByCorreo(username)
+        Usuario usuario = usuarioService.buscarUsuarioByCorreo(username)
                 .orElseThrow(() -> new NoSuchElementException("Usuario no encontrado"));
 
         if (!jwtUtils.isRefreshTokenValid(refreshToken, username)) {
@@ -224,7 +182,7 @@ public class AuthService {
         // Registrar éxito de refresh
         loginLogService.registrarLogsUsuario(usuario, Evento.REFRESH_TOKEN_EXITOSO, Resultado.EXITO, sitio, ip, null);
 
-        return new AuthResponse(newJwt, refreshToken);
+        return new AuthResponse(newJwt, refreshToken, usuario.getRol());
     }
 
     @Transactional
@@ -236,7 +194,7 @@ public class AuthService {
         }
 
         // --- 1. Buscar usuario ---
-        Optional<Usuario> usuarioOpt = usuarioRepository.findByCorreo(email);
+        Optional<Usuario> usuarioOpt = usuarioService.buscarUsuarioByCorreo(email);
 
         if (usuarioOpt.isPresent()) {
             Usuario usuario = usuarioOpt.get();
@@ -254,19 +212,10 @@ public class AuthService {
             accountBlockService.limpiarSiExpirado(usuario, Evento.PASSWORD_RESET_FALLIDO);
 
             // --- Limpiar tokens antiguos ---
-            tokenRepository.deleteByUsuario(usuario);
+            tokenService.eliminarTokenUsuario(usuario);
 
             // --- 3. Generar token seguro ---
-            SecureRandom secureRandom = new SecureRandom();
-            byte[] tokenBytes = new byte[32]; // 256 bits
-            secureRandom.nextBytes(tokenBytes);
-            String token = Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
-
-            PasswordResetToken resetToken = new PasswordResetToken();
-            resetToken.setToken(token);
-            resetToken.setUsuario(usuario);
-            resetToken.setExpiryDate(Date.from(Instant.now().plus(15, ChronoUnit.MINUTES)));
-            tokenRepository.save(resetToken);
+            String token = tokenService.obtenerToken(usuario);
 
             // --- Enviar correo ---
             String resetLink = "http://localhost:5173/reset-password?token=" + token;
@@ -288,7 +237,7 @@ public class AuthService {
             }
 
             // 1. Buscar token en la base de datos
-            Optional<PasswordResetToken> resetTokenOpt = tokenRepository.findByToken(token);
+            Optional<PasswordResetToken> resetTokenOpt = tokenService.buscarToken(token);
 
             if (resetTokenOpt.isEmpty()) {
                 // Token inválido: registrar intento fallido por IP
@@ -308,9 +257,9 @@ public class AuthService {
             }
 
             // 2. Verificar expiración del token
-            if (resetToken.getExpiryDate().before(new Date())) {
+            if (resetToken.getExpiryDate().before(Date.from(Instant.now()))){
                 // Token expirado → eliminarlo y registrar log
-                tokenRepository.delete(resetToken);
+                tokenService.eliminarToken(resetToken);
 
                 loginLogService.registrarLogsUsuario(usuario, Evento.PASSWORD_RESET_TOKEN_EXPIRADO, Resultado.FALLO, sitio, ip, null);
 
@@ -351,12 +300,11 @@ public class AuthService {
                 return false;
             }
 
-            // --- Guardar nueva contraseña ---
-            usuario.setContrasena(passwordEncoder.encode(newPassword));
-            usuarioRepository.save(usuario);
+            // --- Guardar nueva contraseña ---;
+            usuarioService.restablecerContrasena(usuario, newPassword);
 
             // --- Eliminar token ---
-            tokenRepository.deleteByUsuario(usuario);
+            tokenService.eliminarTokenUsuario(usuario);
 
             // --- Enviar correo de confirmación ---
             emailLogService.notificarUsuarios(usuario, Evento.PASSWORD_RESET_EXITOSO, Date.from(Instant.now()), null);

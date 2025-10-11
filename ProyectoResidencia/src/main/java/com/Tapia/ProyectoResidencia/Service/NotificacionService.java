@@ -1,5 +1,6 @@
 package com.Tapia.ProyectoResidencia.Service;
 
+import com.Tapia.ProyectoResidencia.DTO.NotificacionResponse;
 import com.Tapia.ProyectoResidencia.Enum.NotificationTemplate;
 import com.Tapia.ProyectoResidencia.Enum.Rol;
 import com.Tapia.ProyectoResidencia.Enum.TipoNotificacion;
@@ -23,6 +24,7 @@ public class NotificacionService {
     private final NotificationRepository notificationRepository;
     private final NotificacionUsuarioRepository notificacionUsuarioRepository;
     private final UsuarioRepository usuarioRepository;
+    private final UsuarioService usuarioService;
 
     @Transactional
     public void createNotificationSystem(Usuario usuario, NotificationTemplate template) {
@@ -139,6 +141,26 @@ public class NotificacionService {
         return relaciones.stream()
                 .sorted(Comparator.comparing((NotificacionUsuario nu) -> nu.getNotificacion().getTipo())
                         .reversed()) // ADMIN > SISTEMA
+                .collect(Collectors.toList());
+    }
+
+    public List<NotificacionResponse> getNotificacionesPorCorreo(String correo, boolean soloNoLeidas) {
+        Usuario usuario = usuarioService.getUsuarioEntityByCorreo(correo);
+
+        // Usamos tus métodos ya ordenados por tipo y fecha
+        List<NotificacionUsuario> notificaciones = soloNoLeidas
+                ? notificacionUsuarioRepository.findByUsuarioAndLeidaFalseOrderByNotificacion_TipoAscFechaLecturaDesc(usuario)
+                : notificacionUsuarioRepository.findByUsuarioOrderByNotificacion_TipoAscFechaLecturaDesc(usuario);
+
+        return notificaciones.stream()
+                .map(nu -> new NotificacionResponse(
+                        nu.getNotificacion().getTitulo(),
+                        nu.getNotificacion().getMensaje(),
+                        nu.getNotificacion().getTipo(),
+                        nu.isLeida(),
+                        nu.getFechaLectura(),
+                        nu.getNotificacion().getFechaCreacion()
+                ))
                 .collect(Collectors.toList());
     }
 

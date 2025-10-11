@@ -9,48 +9,61 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
+import java.time.Instant;
 import java.util.Date;
 
 @Component
 public class JwtUtils {
 
     private final Key signingKey;
-    private final long expirationTime;
-    private final long expirationTimeRefresh;
+    private final long expirationTime;         // en milisegundos
+    private final long expirationTimeRefresh;  // en milisegundos
+    private static final long ALLOWED_CLOCK_SKEW_SECONDS = 60; // 1 min de tolerancia
 
     public JwtUtils(
             @Value("${jwt.secret}") String secret,
             @Value("${jwt.expiration}") long expirationTime,
             @Value("${jwt.expirationRefresh}") long expirationTimeRefresh) {
+
         byte[] keyBytes = secret.getBytes();
-        System.out.println("🔑 Longitud del secret: " + keyBytes.length); // Debug
-        this.signingKey = Keys.hmacShaKeyFor(secret.getBytes());
+        System.out.println("🔑 Longitud del secret: " + keyBytes.length);
+        this.signingKey = Keys.hmacShaKeyFor(keyBytes);
         this.expirationTime = expirationTime;
         this.expirationTimeRefresh = expirationTimeRefresh;
     }
 
+    // Genera el token principal (access token)
     public String generateToken(Usuario usuario) {
-        return Jwts.builder()
-                .setSubject(usuario.getCorreo()) // usar el atributo real de tu entidad
-                .claim("rol", usuario.getRol().name()) // mismo nombre en generate y extract
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + expirationTime))
-                .signWith(signingKey, SignatureAlgorithm.HS256)
-                .compact();
-    }
+        Instant now = Instant.now();
+        Instant expiration = now.plusMillis(expirationTime);
 
-    public String generateRefreshToken(Usuario usuario) {
         return Jwts.builder()
                 .setSubject(usuario.getCorreo())
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + expirationTimeRefresh)) // 7 días
+                .claim("rol", usuario.getRol().name())
+                .setIssuedAt(Date.from(now))
+                .setExpiration(Date.from(expiration))
                 .signWith(signingKey, SignatureAlgorithm.HS256)
                 .compact();
     }
 
+    // Genera el refresh token
+    public String generateRefreshToken(Usuario usuario) {
+        Instant now = Instant.now();
+        Instant expiration = now.plusMillis(expirationTimeRefresh);
+
+        return Jwts.builder()
+                .setSubject(usuario.getCorreo())
+                .setIssuedAt(Date.from(now))
+                .setExpiration(Date.from(expiration))
+                .signWith(signingKey, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    // Extrae claims y permite margen de tolerancia horaria
     public Claims extractClaims(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(signingKey)
+                .setAllowedClockSkewSeconds(ALLOWED_CLOCK_SKEW_SECONDS)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
@@ -77,6 +90,8 @@ public class JwtUtils {
     }
 
     private boolean isTokenNotExpired(String token) {
-        return extractClaims(token).getExpiration().after(new Date());
+        Date expiration = extractClaims(token).getExpiration();
+        Instant now = Instant.now();
+        return expiration.toInstant().isAfter(now.minusSeconds(ALLOWED_CLOCK_SKEW_SECONDS));
     }
 }

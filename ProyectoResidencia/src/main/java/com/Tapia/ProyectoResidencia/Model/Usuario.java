@@ -29,15 +29,15 @@ public class Usuario {
     private String contrasena; // Contraseña del usuario
 
     @NotBlank(message = "El nombre es obligatorio")
-    @Size(max = 50, message = "El nombre no puede tener más de 50 caracteres")
+    @Size(max = 50, min = 3, message = "El nombre no puede tener más de 50 caracteres ni menos de 3 caracteres")
     private String nombre; //Nombre completo del usuario
 
     @NotBlank(message = "El apellido paterno es obligatorio")
-    @Size(max = 50, message = "El apellido paterno no puede tener más de 50 caracteres")
+    @Size(max = 50, min = 3, message = "El apellido paterno no puede tener más de 50 caracteres ni menos de 3 caracteres")
     private String apellidoPaterno; //Apellido paterno del usuario
 
     @NotBlank(message = "El apellido materno es obligatorio")
-    @Size(max = 50, message = "El apellido materno no puede tener más de 50 caracteres")
+    @Size(max = 50, min = 3, message = "El apellido materno no puede tener más de 50 caracteres ni menos de 3 caracteres")
     private String apellidoMaterno; //Apellido materno del usuario
 
     @NotNull(message = "El estatus es obligatorio")
@@ -68,4 +68,8 @@ public class Usuario {
 
     @OneToMany(mappedBy = "emisor")
     private List<Notification> notificacionesEnviadas = new ArrayList<>();
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "vocalia_id")
+    private Vocalia vocalia;
 }
