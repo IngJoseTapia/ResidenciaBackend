@@ -2,6 +2,7 @@ package com.Tapia.ProyectoResidencia.Model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -31,4 +32,9 @@ public class NotificacionUsuario {
     private boolean resuelta = false;
 
     private LocalDateTime fechaLectura;
+
+    // 🔹 Fecha exacta en que se entregó la notificación al usuario
+    @CreationTimestamp
+    @Column(nullable = false, updatable = false, columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")
+    private LocalDateTime fechaRecepcion;
 }

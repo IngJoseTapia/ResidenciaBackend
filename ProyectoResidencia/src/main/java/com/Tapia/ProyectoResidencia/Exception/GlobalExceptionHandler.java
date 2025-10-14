@@ -172,4 +172,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorResponse(ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR.value()));
     }
+
+    @ExceptionHandler(EmailSendException.class)
+    public ResponseEntity<ErrorResponse> handleEmailSend(EmailSendException ex) {
+        logger.log(Level.WARNING, "Error enviando correo: {0}", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.OK) // ⚠️ No es error crítico para el frontend
+                .body(new ErrorResponse("Ocurrió un problema al enviar notificación por correo: " + ex.getMessage(),
+                        HttpStatus.OK.value()));
+    }
 }

@@ -5,6 +5,7 @@ import com.Tapia.ProyectoResidencia.Enum.Rol;
 import com.Tapia.ProyectoResidencia.Enum.TipoNotificacion;
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -35,13 +36,14 @@ public class Notification {
     @JoinColumn(name = "emisor_id")
     private Usuario emisor;
 
+    @Enumerated(EnumType.STRING)
+    private Rol rolDestino;
+
     // 🔹 Quitamos @ManyToMany y usamos la entidad intermedia
     @OneToMany(mappedBy = "notificacion", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<NotificacionUsuario> destinatarios = new ArrayList<>();
 
-    @Enumerated(EnumType.STRING)
-    private Rol rolDestino;
-
+    @CreationTimestamp
     @Column(nullable = false, updatable = false)
-    private LocalDateTime fechaCreacion = LocalDateTime.now();
+    private LocalDateTime fechaCreacion;
 }

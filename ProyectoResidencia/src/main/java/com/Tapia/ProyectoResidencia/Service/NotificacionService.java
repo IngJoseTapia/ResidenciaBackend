@@ -1,21 +1,22 @@
 package com.Tapia.ProyectoResidencia.Service;
 
 import com.Tapia.ProyectoResidencia.DTO.NotificacionResponse;
+import com.Tapia.ProyectoResidencia.DTO.NotificationStatusRequest;
 import com.Tapia.ProyectoResidencia.Enum.NotificationTemplate;
-import com.Tapia.ProyectoResidencia.Enum.Rol;
 import com.Tapia.ProyectoResidencia.Enum.TipoNotificacion;
 import com.Tapia.ProyectoResidencia.Model.*;
 import com.Tapia.ProyectoResidencia.Repository.NotificationRepository;
 import com.Tapia.ProyectoResidencia.Repository.NotificacionUsuarioRepository;
-import com.Tapia.ProyectoResidencia.Repository.UsuarioRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
+
+import static com.Tapia.ProyectoResidencia.Enum.NotificationTemplate.*;
 
 @Service
 @RequiredArgsConstructor
@@ -23,39 +24,22 @@ public class NotificacionService {
 
     private final NotificationRepository notificationRepository;
     private final NotificacionUsuarioRepository notificacionUsuarioRepository;
-    private final UsuarioRepository usuarioRepository;
     private final UsuarioService usuarioService;
+
+    private static final Map<NotificationTemplate, String[]> SYSTEM_NOTIFICATIONS = Map.of(
+            GENERAR_CONTRASENA, new String[]{"Configura tu contraseña", "Debes generar tu contraseña para poder usar todas las funcionalidades del sistema."},
+            PERFIL_INCOMPLETO, new String[]{"Completa tu perfil", "Actualiza tus datos personales en tu perfil."},
+            NEW_MESSAGE, new String[]{"Nuevo mensaje recibido", "Tienes un nuevo mensaje en tu bandeja de entrada."},
+            CUSTOM_ADMIN, new String[]{"Notificación administrativa", "El administrador ha enviado un aviso importante."}
+    );
 
     @Transactional
     public void createNotificationSystem(Usuario usuario, NotificationTemplate template) {
-        if (existeNotificacionUsuario(usuario, template)) {
-            return; // Evita duplicado
-        }
+        if (notificationRepository.existsByTemplateAndDestinatarios_Usuario(template, usuario)) return;
 
-        String titulo;
-        String mensaje;
-
-        switch (template) {
-            case GENERAR_CONTRASENA:
-                titulo = "Configura tu contraseña";
-                mensaje = "Debes generar tu contraseña para poder usar todas las funcionalidades del sistema.";
-                crearNotificacionSistema(usuario, titulo, mensaje, template);
-                break;
-            case PROFILE_INCOMPLETE:
-                titulo = "Completa tu perfil";
-                mensaje = "Aún tienes campos obligatorios pendientes en tu perfil.";
-                crearNotificacionSistema(usuario, titulo, mensaje, template);
-                break;
-            case NEW_MESSAGE:
-                titulo = "Nuevo mensaje recibido";
-                mensaje = "Tienes un nuevo mensaje en tu bandeja de entrada.";
-                crearNotificacionSistema(usuario, titulo, mensaje, template);
-                break;
-            case CUSTOM_ADMIN:
-                titulo = "Notificación administrativa";
-                mensaje = "El administrador ha enviado un aviso importante.";
-                crearNotificacionSistema(usuario, titulo, mensaje, template);
-                break;
+        String[] info = SYSTEM_NOTIFICATIONS.get(template);
+        if (info != null) {
+            crearNotificacionSistema(usuario, info[0], info[1], template);
         }
     }
 
@@ -65,192 +49,110 @@ public class NotificacionService {
         }
 
         // 1. Crear la notificación
-        Notification notification = new Notification();
-        notification.setTipo(TipoNotificacion.SISTEMA);
-        notification.setTitulo(titulo);
-        notification.setMensaje(mensaje);
-        notification.setTemplate(template); // <-- aquí guardas el tipo
-        notification.setEmisor(null);
-        notification.setRolDestino(null);
-        notification.setFechaCreacion(LocalDateTime.now());
+        Notification notification = notificationRepository
+                .findByTemplate(template)
+                .orElseGet(() -> {
+                    Notification n = new Notification();
+                    n.setTipo(TipoNotificacion.SISTEMA);
+                    n.setTitulo(titulo);
+                    n.setMensaje(mensaje);
+                    n.setTemplate(template);
+                    n.setEmisor(null);
+                    n.setRolDestino(null);
+                    n.setFechaCreacion(LocalDateTime.now());
+                    return notificationRepository.save(n);
+                });
 
         // 2. Crear la relación con el usuario destinatario
         NotificacionUsuario relacion = new NotificacionUsuario();
         relacion.setNotificacion(notification);
         relacion.setUsuario(usuario);
         relacion.setLeida(false);
+        relacion.setResuelta(false);
+        relacion.setFechaRecepcion(LocalDateTime.now());
 
         // 3. Vincular ambas entidades
         notification.getDestinatarios().add(relacion);
-        usuario.getNotificacionesRecibidas().add(relacion);
+        //usuario.getNotificacionesRecibidas().add(relacion);
 
         // 4. Guardar la notificación (esto también guarda la relación por cascade)
         notificationRepository.save(notification);
+        notificationRepository.flush(); // fuerza commit en BD
     }
 
     public boolean existeNotificacionUsuario(Usuario usuario, NotificationTemplate template) {
         return notificationRepository.existsByTemplateAndDestinatarios_Usuario(template, usuario);
     }
 
-    @Transactional
-    public void eliminarNotificacionesPorTemplate(Usuario usuario, NotificationTemplate template) {
-        List<NotificacionUsuario> relaciones = notificacionUsuarioRepository
-                .findByUsuarioAndNotificacion_Template(usuario, template);
-
-        if (relaciones.isEmpty()) return;
-
-        // Extraer las notificaciones asociadas
-        List<Notification> notificaciones = relaciones.stream()
-                .map(NotificacionUsuario::getNotificacion)
-                .distinct()
-                .toList();
-
-        // Eliminar primero las relaciones
-        notificacionUsuarioRepository.deleteAll(relaciones);
-
-        // Luego eliminar las notificaciones si ya no tienen destinatarios
-        for (Notification n : notificaciones) {
-            if (n.getDestinatarios().isEmpty()) {
-                notificationRepository.delete(n);
-            }
-        }
-    }
-
-    @Transactional
-    public void marcarNotificacionResuelta(Usuario usuario, NotificationTemplate template) {
-        // Buscar todas las notificaciones activas de este tipo para este usuario
-        List<NotificacionUsuario> relaciones = notificacionUsuarioRepository
-                .findByUsuarioAndNotificacion_TemplateAndResueltaFalse(usuario, template);
-
-        if (relaciones.isEmpty()) return;
-
-        for (NotificacionUsuario rel : relaciones) {
-            rel.setResuelta(true);
-            rel.setFechaLectura(LocalDateTime.now());
-        }
-
-        notificacionUsuarioRepository.saveAll(relaciones);
-    }
-
-    public List<NotificacionUsuario> getNotificacionesUsuario(Usuario usuario, boolean soloNoLeidas) {
-        List<NotificacionUsuario> relaciones = soloNoLeidas
-                ? notificacionUsuarioRepository.findByUsuarioAndLeidaFalseOrderByNotificacion_TipoAscFechaLecturaDesc(usuario)
-                : notificacionUsuarioRepository.findByUsuarioOrderByNotificacion_TipoAscFechaLecturaDesc(usuario);
-
-        // Ordenar primero las notificaciones de ADMIN, luego SISTEMA
-        return relaciones.stream()
-                .sorted(Comparator.comparing((NotificacionUsuario nu) -> nu.getNotificacion().getTipo())
-                        .reversed()) // ADMIN > SISTEMA
-                .collect(Collectors.toList());
-    }
-
     public List<NotificacionResponse> getNotificacionesPorCorreo(String correo, boolean soloNoLeidas) {
         Usuario usuario = usuarioService.getUsuarioEntityByCorreo(correo);
 
-        // Usamos tus métodos ya ordenados por tipo y fecha
         List<NotificacionUsuario> notificaciones = soloNoLeidas
                 ? notificacionUsuarioRepository.findByUsuarioAndLeidaFalseOrderByNotificacion_TipoAscFechaLecturaDesc(usuario)
                 : notificacionUsuarioRepository.findByUsuarioOrderByNotificacion_TipoAscFechaLecturaDesc(usuario);
 
         return notificaciones.stream()
                 .map(nu -> new NotificacionResponse(
+                        nu.getId(), // 🔹 ID de la relación NotificacionUsuario
                         nu.getNotificacion().getTitulo(),
                         nu.getNotificacion().getMensaje(),
                         nu.getNotificacion().getTipo(),
+                        nu.getNotificacion().getTemplate(),
                         nu.isLeida(),
-                        nu.getFechaLectura(),
-                        nu.getNotificacion().getFechaCreacion()
+                        nu.isResuelta(),
+                        nu.getFechaRecepcion(), // 🔹 ahora usamos la fecha de recepción real
+                        nu.getFechaLectura()    // 🔹 si no ha sido leída, será null
                 ))
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Crear notificación generada por el sistema
-     */
+
     @Transactional
-    public Notification crearNotificacionSistema(String titulo, String mensaje, Rol rolDestino) {
-        Notification notificacion = new Notification();
-        notificacion.setTipo(TipoNotificacion.SISTEMA);
-        notificacion.setTitulo(titulo);
-        notificacion.setMensaje(mensaje);
-        notificacion.setRolDestino(rolDestino);
-
-        notificationRepository.save(notificacion);
-
-        // Asignar automáticamente a todos los usuarios del rol
-        List<Usuario> usuarios = usuarioRepository.findByRol(rolDestino);
-        for (Usuario usuario : usuarios) {
-            NotificacionUsuario nu = new NotificacionUsuario();
-            nu.setNotificacion(notificacion);
-            nu.setUsuario(usuario);
-            nu.setLeida(false);
-            nu.setFechaLectura(null);
-            notificacionUsuarioRepository.save(nu);
+    public void actualizarEstadoNotificacion(Long idRelacion, Usuario usuario, NotificationStatusRequest request) {
+        if (request.leida() == null && request.resuelta() == null) {
+            throw new IllegalArgumentException("Debe especificarse al menos un campo para actualizar.");
         }
 
-        return notificacion;
-    }
+        NotificacionUsuario relacion = notificacionUsuarioRepository
+                .findByIdAndUsuario(idRelacion, usuario)
+                .orElseThrow(() -> new IllegalArgumentException("Notificación no encontrada o no pertenece al usuario."));
 
-    /**
-     * Crear notificación generada por un administrador
-     */
-    @Transactional
-    public Notification crearNotificacionAdmin(Usuario emisor, String titulo, String mensaje, List<Long> destinatariosIds, Rol rolDestino) {
-        Notification notificacion = new Notification();
-        notificacion.setTipo(TipoNotificacion.ADMIN);
-        notificacion.setTitulo(titulo);
-        notificacion.setMensaje(mensaje);
-        notificacion.setEmisor(emisor);
-        notificacion.setRolDestino(rolDestino);
+        boolean cambios = false;
 
-        notificationRepository.save(notificacion);
-
-        // Si se envía a un rol completo
-        if (rolDestino != null) {
-            List<Usuario> usuarios = usuarioRepository.findByRol(rolDestino);
-            for (Usuario usuario : usuarios) {
-                crearRelacionNotificacionUsuario(notificacion, usuario);
-            }
+        if (Boolean.TRUE.equals(request.leida()) && !relacion.isLeida()) {
+            relacion.setLeida(true);
+            relacion.setFechaLectura(LocalDateTime.now());
+            cambios = true;
         }
 
-        // Si se envía a usuarios específicos
-        if (destinatariosIds != null && !destinatariosIds.isEmpty()) {
-            List<Usuario> usuarios = usuarioRepository.findAllById(destinatariosIds);
-            for (Usuario usuario : usuarios) {
-                crearRelacionNotificacionUsuario(notificacion, usuario);
-            }
+        if (Boolean.TRUE.equals(request.resuelta()) && !relacion.isResuelta()) {
+            relacion.setResuelta(true);
+            cambios = true;
         }
 
-        return notificacion;
+        if (cambios) {
+            notificacionUsuarioRepository.save(relacion);
+        }
     }
 
-    /**
-     * Marcar notificación como leída
-     */
     @Transactional
-    public void marcarComoLeida(Long notificacionId, Long usuarioId) {
-        NotificacionUsuario nu = notificacionUsuarioRepository.findByNotificacionIdAndUsuarioId(notificacionId, usuarioId)
-                .orElseThrow(() -> new RuntimeException("No se encontró la notificación para este usuario"));
-        nu.setLeida(true);
-        nu.setFechaLectura(LocalDateTime.now());
-        notificacionUsuarioRepository.save(nu);
-    }
+    public void resolverYEliminarNotificaciones(Usuario usuario, NotificationTemplate template) {
+        // 1️⃣ Buscar relaciones pendientes de resolución
+        List<NotificacionUsuario> relaciones =
+                notificacionUsuarioRepository.findByUsuarioAndNotificacion_TemplateAndResueltaFalse(usuario, template);
 
-    /**
-     * Obtener notificaciones de un usuario
-     */
-    public List<NotificacionUsuario> obtenerNotificacionesUsuario(Long usuarioId) {
-        return notificacionUsuarioRepository.findByUsuarioId(usuarioId);
-    }
+        if (relaciones.isEmpty()) return;
 
-    /**
-     * Método auxiliar para crear relación Notificación-Usuario
-     */
-    private void crearRelacionNotificacionUsuario(Notification notificacion, Usuario usuario) {
-        NotificacionUsuario nu = new NotificacionUsuario();
-        nu.setNotificacion(notificacion);
-        nu.setUsuario(usuario);
-        nu.setLeida(false);
-        notificacionUsuarioRepository.save(nu);
+        // 2️⃣ Marcar como resuelta y registrar fecha de lectura
+        for (NotificacionUsuario rel : relaciones) {
+            rel.setResuelta(true);
+            rel.setFechaLectura(LocalDateTime.now());
+        }
+        notificacionUsuarioRepository.saveAll(relaciones);
+
+        // 3️⃣ Eliminar únicamente la relación del usuario con la notificación
+        notificacionUsuarioRepository.deleteAll(relaciones);
+
+        // ❌ No tocar la tabla Notification, para mantener la notificación del sistema global
     }
 }

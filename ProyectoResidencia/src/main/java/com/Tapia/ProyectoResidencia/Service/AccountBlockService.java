@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -136,5 +137,17 @@ public class AccountBlockService {
                     nuevo.setIp(ip);
                     return nuevo;
                 });
+    }
+
+    public Optional<AccountBlock> obtenerBloqueoActivo(Usuario usuario, Evento evento) {
+        Optional<AccountBlock> bloqueoOpt = accountBlockRepository.findByUsuarioAndEvento(usuario, evento);
+        bloqueoOpt.ifPresent(bloqueo -> {
+            if (bloqueo.getBloqueadaHasta() != null && bloqueo.getBloqueadaHasta().before(new Date())) {
+                bloqueo.setIntentosFallidos(0);
+                bloqueo.setBloqueadaHasta(null);
+                accountBlockRepository.save(bloqueo);
+            }
+        });
+        return bloqueoOpt;
     }
 }

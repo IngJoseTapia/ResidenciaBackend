@@ -1,6 +1,7 @@
 package com.Tapia.ProyectoResidencia.Service;
 
 import com.Tapia.ProyectoResidencia.Enum.Evento;
+import com.Tapia.ProyectoResidencia.Exception.EmailSendException;
 import com.Tapia.ProyectoResidencia.Model.EmailLog;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
 import com.Tapia.ProyectoResidencia.Repository.EmailLogRepository;
@@ -22,11 +23,11 @@ import java.util.logging.Logger;
 public class EmailLogService {
 
     private final JavaMailSender mailSender;
+    private static final Logger logger = Logger.getLogger(EmailLogService.class.getName());
 
     @Value("${app.admin.emails}") // lista separada por comas
     private String adminEmails;
     private final EmailLogRepository emailLogRepository;
-    private static final Logger logger = Logger.getLogger(EmailLogService.class.getName());
 
     public void notificarAdministradores(Usuario usuario, Evento evento, Date desbloqueo, String ip){
         String asunto;
@@ -343,31 +344,34 @@ public class EmailLogService {
                 SimpleMailMessage msgAdmin = new SimpleMailMessage();
                 msgAdmin.setTo(destinatario.trim());
                 msgAdmin.setSubject("[ADMIN] " + asunto);
-                if(evento == Evento.POSIBLE_ATAQUE_IP){
+
+                // Determinar el contenido del correo
+                if (evento == Evento.POSIBLE_ATAQUE_IP) {
                     msgAdmin.setText(cuerpo);
                 } else {
                     msgAdmin.setText(cuerpo + "\n\nUsuario afectado: " + usuario.getCorreo());
                 }
+
+                // Enviar correo
                 mailSender.send(msgAdmin);
 
                 // Registrar notificación exitosa
                 if (evento == Evento.POSIBLE_ATAQUE_IP) {
                     registrarNotificacion(null, destinatario.trim(), evento, "[ADMIN] " + asunto, cuerpo);
                 } else {
-                    registrarNotificacion(usuario.getId(), destinatario.trim(), evento, "[ADMIN] " + asunto,
-                            cuerpo + "\n\nUsuario afectado: " + usuario.getCorreo());
+                    registrarNotificacion(usuario.getId(), destinatario.trim(), evento, "[ADMIN] " + asunto, cuerpo + "\n\nUsuario afectado: " + usuario.getCorreo());
                 }
 
             } catch (Exception ex) {
                 // Registrar fallo individualmente
-                registrarNotificacion(usuario.getId(), destinatario.trim(), evento, "[ADMIN] " + asunto,
-                        "ERROR AL ENVIAR CORREO: " + ex.getMessage() + "\n\n" + cuerpo);
-                logger.log(Level.SEVERE, "Error enviando correo al admin {0}: {1}", new Object[]{destinatario.trim(), ex.getMessage()});
+                registrarNotificacion(usuario.getId(), destinatario.trim(), evento, "[ADMIN] " + asunto, "ERROR AL ENVIAR CORREO: " + ex.getMessage() + "\n\n" + cuerpo);
+                EmailSendException e = new EmailSendException("No se pudo enviar correo a " + usuario.getCorreo(), ex);
+                logger.log(Level.WARNING, "Error enviando correo al admin {0}: {1}",
+                        new Object[]{destinatario.trim(), e.getMessage()});
                 //throw new RuntimeException("Error enviando correo a " + usuario.getCorreo(), ex);
             }
         }
     }
-
 
     private void enviarCorreoUsuarios(Usuario usuario, Evento evento, String asunto, String cuerpo) {
         try {
@@ -375,12 +379,18 @@ public class EmailLogService {
             mensaje.setTo(usuario.getCorreo());
             mensaje.setSubject(asunto);
             mensaje.setText(cuerpo);
+
+            // Enviar correo
             mailSender.send(mensaje);
+
+            // Registrar notificación exitosa
             registrarNotificacion(usuario.getId(), usuario.getCorreo(), evento, asunto, cuerpo);
+
         } catch (Exception e) {
-            registrarNotificacion(usuario.getId(), usuario.getCorreo(), evento, asunto,
-                    "ERROR AL ENVIAR CORREO: " + e.getMessage() + "\n\n" + cuerpo);
-            throw new RuntimeException("Error enviando correo a " + usuario.getCorreo(), e);
+            // Registrar fallo y lanzar excepción
+            registrarNotificacion(usuario.getId(), usuario.getCorreo(), evento, asunto, "ERROR AL ENVIAR CORREO: " + e.getMessage() + "\n\n" + cuerpo);
+            EmailSendException ex = new EmailSendException("No se pudo enviar correo a " + usuario.getCorreo(), e);
+            logger.log(Level.WARNING, ex.getMessage());
         }
     }
 

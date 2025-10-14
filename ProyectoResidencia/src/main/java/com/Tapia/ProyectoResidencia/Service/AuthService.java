@@ -5,6 +5,8 @@ import com.Tapia.ProyectoResidencia.DTO.RegisterRequest;
 import com.Tapia.ProyectoResidencia.DTO.AuthResponse;
 import com.Tapia.ProyectoResidencia.Enum.*;
 import com.Tapia.ProyectoResidencia.Exception.BloqueoException;
+import com.Tapia.ProyectoResidencia.Exception.UserNotFoundException;
+import com.Tapia.ProyectoResidencia.Model.AccountBlock;
 import com.Tapia.ProyectoResidencia.Model.PasswordResetToken;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
 import com.Tapia.ProyectoResidencia.Utils.JwtUtils;
@@ -56,60 +58,58 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest request, Sitio sitio, String ip) {
-        Usuario usuario = null;
-
         try {
-            // 0. Revisar bloqueo por IP
+            // 1️⃣ Verificar bloqueo por IP
             if (ipBlockService.estaBloqueada(ip)) {
-                loginLogService.registrarLogsCorreo(request.email(), Evento.LOGIN_FALLIDO, Resultado.FALLO, sitio, ip, "0");
-                throw new BloqueoException("La IP está bloqueada. Intente más tarde.");
+                loginLogService.registrarLogsCorreo(request.email(), Evento.LOGIN_FALLIDO, Resultado.BLOQUEADO, sitio, ip, "0");
+                throw new BloqueoException("La IP está bloqueada temporalmente por intentos fallidos.");
             }
 
-            // 1. Verificar si el correo existe en la BD
-            Optional<Usuario> usuarioOpt = usuarioService.buscarUsuarioByCorreo(request.email());
-            if (usuarioOpt.isEmpty()) {
-                // incrementar contador por IP
+            // 2️⃣ Intentar autenticación con Spring Security
+            try {
+                authenticationManager.authenticate(
+                        new UsernamePasswordAuthenticationToken(request.email(), request.password())
+                );
+            } catch (BadCredentialsException e) {
+                // ❌ Credenciales inválidas → registrar intento fallido
+                usuarioService.buscarUsuarioByCorreo(request.email()).ifPresent(usuario ->
+                        accountBlockService.registrarIntentoFallido(usuario, Evento.LOGIN_FALLIDO, ip)
+                );
                 ipBlockService.registrarIntentoFallido(ip);
-                loginLogService.registrarLogsCorreo(request.email(), Evento.LOGIN_FALLIDO, Resultado.FALLO, sitio, ip, "1");
-                throw new NoSuchElementException("El correo no está registrado");
+                loginLogService.registrarLogsCorreo(request.email(), Evento.LOGIN_FALLIDO, Resultado.FALLO, Sitio.WEB, ip, "2");
+                throw new BadCredentialsException("Contraseña incorrecta");
             }
 
-            usuario = usuarioOpt.get();
+            // 3️⃣ Obtener usuario autenticado (1 sola consulta)
+            Usuario usuario = usuarioService.buscarUsuarioByCorreo(request.email())
+                    .orElseThrow(() -> new UserNotFoundException("Usuario no encontrado"));
 
-            // 2. Revisar bloqueo por cuenta
-            if (accountBlockService.estaBloqueada(usuario, Evento.LOGIN_FALLIDO)) {
-                loginLogService.registrarLogsUsuario(usuario, Evento.LOGIN_FALLIDO, Resultado.FALLO, sitio, ip, "2");
-                throw new BloqueoException("La cuenta está bloqueada. Intente más tarde.");
-            } else {
-                // limpia si ya expiró
-                accountBlockService.limpiarSiExpirado(usuario, Evento.LOGIN_FALLIDO);
+            // 4️⃣ Verificar si el usuario está bloqueado por evento LOGIN_FALLIDO
+            Optional<AccountBlock> bloqueoOpt = accountBlockService.obtenerBloqueoActivo(usuario, Evento.LOGIN_FALLIDO);
+            if (bloqueoOpt.isPresent() && bloqueoOpt.get().getBloqueadaHasta() != null) {
+                Date ahora = new Date();
+                if (bloqueoOpt.get().getBloqueadaHasta().after(ahora)) {
+                    loginLogService.registrarLogsUsuario(usuario, Evento.LOGIN_FALLIDO, Resultado.BLOQUEADO, sitio, ip, "2");
+                    throw new BloqueoException("La cuenta está bloqueada. Intente más tarde.");
+                }
             }
 
-            // 3. Autenticar (puede lanzar BadCredentialsException)
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.email(), request.password())
-            );
-
-            // 4. Login exitoso: resetear contadores y generar tokens
+            // 5️⃣ Si hay bloqueos expirados → limpiar
             accountBlockService.limpiarBloqueo(usuario, Evento.LOGIN_FALLIDO);
             ipBlockService.limpiarIntentos(ip);
 
+            // 6️⃣ Generar token JWT
             String jwt = jwtUtils.generateToken(usuario);
             String refreshToken = jwtUtils.generateRefreshToken(usuario);
 
-            // Registrar log de éxito
+            // 7️⃣ Registrar login exitoso
             loginLogService.registrarLogsUsuario(usuario, Evento.LOGIN_EXITOSO, Resultado.EXITO, sitio, ip, null);
 
+            // 8️⃣ Retornar respuesta exitosa
             return new AuthResponse(jwt, refreshToken, usuario.getRol());
-        } catch (BadCredentialsException e) {
-            //  Contraseña incorrecta
-            if (usuario != null) {
-                accountBlockService.registrarIntentoFallido(usuario, Evento.LOGIN_FALLIDO, ip); // incrementa y bloquea si aplica
-            }
-            ipBlockService.registrarIntentoFallido(ip);
-            loginLogService.registrarLogsUsuario(usuario, Evento.LOGIN_FALLIDO, Resultado.FALLO, Sitio.WEB, ip, "3");
-
-            throw new BadCredentialsException("Contraseña incorrecta");
+        } catch (Exception e) {
+            System.err.println("Error en login: " + e.getMessage());
+            throw new RuntimeException(e);
         }
     }
 
@@ -127,10 +127,10 @@ public class AuthService {
 
         if(!usuarioService.existeUsuarioByCorreo(correo)) {
             Usuario usuario = usuarioService.registrarUsuarioGoogle(correo, nombre);
-
             emailLogService.notificarUsuarios(usuario, Evento.USER_REGISTRADO_GOOGLE, Date.from(Instant.now()), null);
             loginLogService.registrarLogsUsuario(usuario, Evento.USER_REGISTRADO_GOOGLE, Resultado.EXITO, sitio, ip, null);
             notificacionService.createNotificationSystem(usuario, NotificationTemplate.GENERAR_CONTRASENA);
+            notificacionService.createNotificationSystem(usuario, NotificationTemplate.PERFIL_INCOMPLETO);
         }
 
         Usuario usuario = usuarioService.getUsuarioEntityByCorreo(correo);

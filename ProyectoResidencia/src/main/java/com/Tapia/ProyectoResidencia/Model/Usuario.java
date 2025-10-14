@@ -63,7 +63,7 @@ public class Usuario {
     @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PasswordResetToken> passwordResetTokens = new ArrayList<>();
 
-    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "usuario", /*cascade = CascadeType.ALL,*/ orphanRemoval = true)
     private List<NotificacionUsuario> notificacionesRecibidas = new ArrayList<>();
 
     @OneToMany(mappedBy = "emisor")

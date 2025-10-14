@@ -37,10 +37,25 @@ public class UserService {
         Usuario user = usuarioService.getUsuarioEntityByCorreo(correo);
 
         boolean tieneContrasena = user.getContrasena() != null && !user.getContrasena().isBlank() && !user.getContrasena().startsWith("AUTO_");
-
         if(!tieneContrasena) {
             if (!notificacionService.existeNotificacionUsuario(user, NotificationTemplate.GENERAR_CONTRASENA)) {
                 notificacionService.createNotificationSystem(user, NotificationTemplate.GENERAR_CONTRASENA);
+            }
+        }
+
+        boolean perfilIncompleto =
+                user.getApellidoPaterno() == null || user.getApellidoMaterno() == null || user.getGenero() == null ||
+                        user.getApellidoPaterno().startsWith("N/A") || user.getApellidoMaterno().startsWith("N/A") ||
+                        user.getGenero().equalsIgnoreCase("Otro");
+
+        if (perfilIncompleto) {
+            if (!notificacionService.existeNotificacionUsuario(user, NotificationTemplate.PERFIL_INCOMPLETO)) {
+                try {
+                    notificacionService.createNotificationSystem(user, NotificationTemplate.PERFIL_INCOMPLETO);
+                } catch (DataIntegrityViolationException e) {
+                    // Evita error "Duplicate entry" si ya existe una notificación en BD
+                    System.out.println("⚠️ Notificación 'PERFIL_INCOMPLETO' ya existente para el usuario " + user.getCorreo());
+                }
             }
         }
 
@@ -66,6 +81,13 @@ public class UserService {
 
         try {
             Usuario usuario = usuarioService.actualizarUsuario(user, request);
+            boolean perfilCompleto =
+                    !user.getApellidoPaterno().startsWith("N/A") &&
+                            !user.getApellidoMaterno().startsWith("N/A") &&
+                            !user.getGenero().matches("Otro");
+            if (perfilCompleto && notificacionService.existeNotificacionUsuario(usuario, NotificationTemplate.PERFIL_INCOMPLETO)) {
+                notificacionService.resolverYEliminarNotificaciones(usuario, NotificationTemplate.PERFIL_INCOMPLETO);
+            }
             systemLogService.registrarLogUsuario(
                     usuario, Evento.UPDATE_INFO_USUARIO_EXITOSO, Resultado.EXITO, Sitio.WEB, ip, null
             );
@@ -170,9 +192,7 @@ public class UserService {
             accountBlockService.limpiarBloqueo(user, Evento.PASSWORD_CHANGE_RECHAZADO);
             accountBlockService.registrarCambioPasswordExitoso(user, Evento.PASSWORD_CHANGE_EXITOSO, ip);
             ipBlockService.limpiarIntentos(ip);
-            notificacionService.marcarNotificacionResuelta(user, NotificationTemplate.GENERAR_CONTRASENA);
-            if(notificacionService.existeNotificacionUsuario(user, NotificationTemplate.GENERAR_CONTRASENA))
-                notificacionService.eliminarNotificacionesPorTemplate(user, NotificationTemplate.GENERAR_CONTRASENA);
+            notificacionService.resolverYEliminarNotificaciones(user, NotificationTemplate.GENERAR_CONTRASENA);
         } catch (Exception e) {
             if (e instanceof InvalidPasswordException || e instanceof WeakPasswordException) {
                 throw e; // deja que siga al handler global

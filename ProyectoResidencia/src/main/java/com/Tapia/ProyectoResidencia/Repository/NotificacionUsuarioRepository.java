@@ -26,4 +26,6 @@ public interface NotificacionUsuarioRepository extends JpaRepository<Notificacio
     List<NotificacionUsuario> findByUsuarioAndLeidaFalseOrderByNotificacion_TipoAscFechaLecturaDesc(Usuario usuario);
 
     //List<NotificacionUsuario> findByUsuarioAndLeidaFalse(Usuario usuario);
+
+    Optional<NotificacionUsuario> findByIdAndUsuario(Long id, Usuario usuario);
 }
