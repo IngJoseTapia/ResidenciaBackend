@@ -7,4 +7,5 @@ import java.util.Optional;
 public interface VocaliaRepository extends JpaRepository<Vocalia, Long> {
     Optional<Vocalia> findByAbreviatura(String abreviatura);
     boolean existsByAbreviatura(String abreviatura);
+    boolean existsByAbreviaturaAndIdNot(String abreviatura, Long id);
 }

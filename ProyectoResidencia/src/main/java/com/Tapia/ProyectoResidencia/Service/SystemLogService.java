@@ -85,6 +85,50 @@ public class SystemLogService {
                 descripcion = "Contraseña generada exitosamente";
                 registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
             }
+            case VOCALIA_REGISTER_EXITOSO -> {
+                descripcion = "Vocalía registrada exitosamente";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+            }
+            case VOCALIA_REGISTER_FALLIDO -> {
+                descripcion = "Ya existe una vocalía con la misma abreviatura";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+            }
+            case VOCALIA_REGISTER_ERROR -> {
+                if (id.equals("1")){
+                    descripcion = "Ocurrió un error interno en el sistema al registrar la vocalía";
+                    registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                } else {
+                    registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, id, ip);
+                }
+            }
+            case VOCALIA_UPDATE_EXITOSO -> {
+                descripcion = "Vocalía actualizada exitosamente";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+            }
+            case VOCALIA_UPDATE_FALLIDO -> {
+                descripcion = "Ya existe un registro de vocalía con la misma abreviatura";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+            }
+            case VOCALIA_UPDATE_ERROR -> {
+                if (id.equals("1")){
+                    descripcion = "Ocurrió un error interno en el sistema al actualizar la vocalía";
+                    registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                } else {
+                    registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, id, ip);
+                }
+            }
+            case VOCALIA_DELETE_EXITOSO -> {
+                descripcion = "Vocalía eliminada exitosamente";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+            }
+            case VOCALIA_DELETE_ERROR -> {
+                if (id.equals("1")){
+                    descripcion = "Ocurrió un error interno en el sistema al eliminar la vocalía";
+                    registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                } else {
+                    registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, id, ip);
+                }
+            }
         }
     }
 
