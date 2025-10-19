@@ -1,10 +1,8 @@
 package com.Tapia.ProyectoResidencia.Service;
 
+import com.Tapia.ProyectoResidencia.DTO.VocaliaAssign;
 import com.Tapia.ProyectoResidencia.DTO.VocaliaCreate;
-import com.Tapia.ProyectoResidencia.Enum.Evento;
-import com.Tapia.ProyectoResidencia.Enum.Resultado;
-import com.Tapia.ProyectoResidencia.Enum.Rol;
-import com.Tapia.ProyectoResidencia.Enum.Sitio;
+import com.Tapia.ProyectoResidencia.Enum.*;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
 import com.Tapia.ProyectoResidencia.Model.Vocalia;
 import com.Tapia.ProyectoResidencia.Repository.UsuarioRepository;
@@ -106,19 +104,32 @@ public class VocaliaService {
     }
 
     @Transactional
-    public Usuario asignarVocaliaAUsuario(Long usuarioId, Long vocaliaId) {
-        Usuario usuario = usuarioRepository.findById(usuarioId)
+    public void asignarVocaliaAUsuario(Authentication authentication, VocaliaAssign dto, Sitio sitio, String ip) {
+        String correoAdmin = AuthUtils.extractEmailFromAuth(authentication);
+        Usuario admin = usuarioService.getUsuarioEntityByCorreo(correoAdmin);
+
+        Usuario usuario = usuarioRepository.findById(dto.usuarioId())
                 .orElseThrow(() -> new NoSuchElementException("Usuario no encontrado"));
 
-        Vocalia vocalia = vocaliaRepository.findById(vocaliaId)
+        Vocalia vocalia = vocaliaRepository.findById(dto.vocaliaId())
                 .orElseThrow(() -> new NoSuchElementException("Vocalía no encontrada"));
 
-        if (!usuario.getRol().equals(Rol.VOCAL)) {
-            throw new IllegalArgumentException("Solo usuarios con rol VOCAL pueden ser asignados a una vocalía");
-        }
+        try {
+            // Asignar vocalía
+            usuario.setVocalia(vocalia);
+            // Cambiar status de pendiente a activo
+            usuario.setStatus(Status.ACTIVO);  // ajusta según tu enum o string de status
+            usuarioRepository.save(usuario);
 
-        usuario.setVocalia(vocalia);
-        return usuarioRepository.save(usuario);
+            // Registrar evento exitoso
+            systemLogService.registrarLogUsuario(admin, Evento.ASIGNACION_VOCALIA_EXITOSO, Resultado.EXITO, sitio, ip, null);
+
+        } catch (Exception e) {
+            // Registrar evento de error
+            systemLogService.registrarLogUsuario(admin, Evento.ASIGNACION_VOCALIA_ERROR, Resultado.FALLO, sitio, ip,
+                    "Error interno del servidor: " + e.getMessage());
+            throw e;
+        }
     }
 
     private Vocalia vocalia(Vocalia vocalia, Evento evento, Usuario user, Sitio sitio, String ip) {

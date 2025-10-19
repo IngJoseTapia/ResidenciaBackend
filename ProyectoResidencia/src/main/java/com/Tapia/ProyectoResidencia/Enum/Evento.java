@@ -55,7 +55,6 @@ public enum Evento {
 
     //Asignación de vocalías a usuarios
     ASIGNACION_VOCALIA_EXITOSO,
-    ASIGNACION_VOCALIA_FALLIDO,
     ASIGNACION_VOCALIA_ERROR,
     //
     DESCONOCIDO

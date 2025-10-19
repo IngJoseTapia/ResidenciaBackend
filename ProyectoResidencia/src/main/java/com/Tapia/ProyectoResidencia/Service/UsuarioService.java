@@ -8,6 +8,8 @@ import com.Tapia.ProyectoResidencia.Model.Usuario;
 import com.Tapia.ProyectoResidencia.Repository.UsuarioRepository;
 import jakarta.validation.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -100,6 +102,10 @@ public class UsuarioService {
 
     public List<Usuario> listarUsuarios() {
         return usuarioRepository.findAll();
+    }
+
+    public Page<Usuario> getUsuariosByStatus(Status status, Pageable pageable) {
+        return usuarioRepository.findByStatus(status, pageable);
     }
 
     private Usuario createUser(Usuario usuario){

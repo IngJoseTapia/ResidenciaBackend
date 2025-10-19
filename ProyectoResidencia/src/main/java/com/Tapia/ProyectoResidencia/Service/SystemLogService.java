@@ -129,6 +129,14 @@ public class SystemLogService {
                     registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, id, ip);
                 }
             }
+            case ASIGNACION_VOCALIA_EXITOSO -> {
+                descripcion = "Vinculación de vocalía a usuario exitosa";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+            }
+            case ASIGNACION_VOCALIA_ERROR -> {
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, id, ip);
+            }
+
         }
     }
 

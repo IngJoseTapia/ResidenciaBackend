@@ -37,7 +37,7 @@ public class UserController {
                                                     HttpServletRequest httpRequest) {
         String ip = IpUtils.extractClientIp(httpRequest);
         String correo = AuthUtils.extractEmailFromAuth(authentication);
-        userService.updateUser(correo, request, ip);
+        userService.updateUser(correo, request, Sitio.WEB, ip);
 
         ApiResponse response = new ApiResponse("Información actualizada correctamente ✅", HttpStatus.OK.value());
         return ResponseEntity.ok(response);

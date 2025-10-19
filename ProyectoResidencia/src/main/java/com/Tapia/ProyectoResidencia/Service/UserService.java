@@ -3,10 +3,8 @@ package com.Tapia.ProyectoResidencia.Service;
 import com.Tapia.ProyectoResidencia.DTO.ChangePasswordRequest;
 import com.Tapia.ProyectoResidencia.DTO.UpdateUserRequest;
 import com.Tapia.ProyectoResidencia.DTO.UserResponse;
-import com.Tapia.ProyectoResidencia.Enum.Evento;
-import com.Tapia.ProyectoResidencia.Enum.NotificationTemplate;
-import com.Tapia.ProyectoResidencia.Enum.Resultado;
-import com.Tapia.ProyectoResidencia.Enum.Sitio;
+import com.Tapia.ProyectoResidencia.DTO.UsuarioPendienteAsignacion;
+import com.Tapia.ProyectoResidencia.Enum.*;
 import com.Tapia.ProyectoResidencia.Exception.*;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
 import com.Tapia.ProyectoResidencia.Utils.PasswordUtils;
@@ -14,9 +12,12 @@ import jakarta.validation.ConstraintViolationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionSystemException;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Date;
@@ -71,7 +72,8 @@ public class UserService {
         );
     }
 
-    public void updateUser(String correo, UpdateUserRequest request, String ip) {
+    @Transactional
+    public void updateUser(String correo, UpdateUserRequest request, Sitio sitio, String ip) {
         Usuario user = usuarioService.getUsuarioEntityByCorreo(correo);
 
         // Validación especial para usuarios sin contraseña (login Google)
@@ -89,18 +91,18 @@ public class UserService {
                 notificacionService.resolverYEliminarNotificaciones(usuario, NotificationTemplate.PERFIL_INCOMPLETO);
             }
             systemLogService.registrarLogUsuario(
-                    usuario, Evento.UPDATE_INFO_USUARIO_EXITOSO, Resultado.EXITO, Sitio.WEB, ip, null
+                    usuario, Evento.UPDATE_INFO_USUARIO_EXITOSO, Resultado.EXITO, sitio, ip, null
             );
         } catch (DataIntegrityViolationException e) {
             systemLogService.registrarLogUsuario(
-                    user, Evento.UPDATE_INFO_USUARIO_FALLIDO, Resultado.FALLO, Sitio.WEB, ip,
+                    user, Evento.UPDATE_INFO_USUARIO_FALLIDO, Resultado.FALLO, sitio, ip,
                     "Violación de integridad en la BD: " + e.getMostSpecificCause().getMessage()
             );
             throw e;
 
         } catch (OptimisticLockingFailureException e) {
             systemLogService.registrarLogUsuario(
-                    user, Evento.UPDATE_INFO_USUARIO_FALLIDO, Resultado.FALLO, Sitio.WEB, ip,
+                    user, Evento.UPDATE_INFO_USUARIO_FALLIDO, Resultado.FALLO, sitio, ip,
                     "Conflicto de concurrencia al actualizar usuario"
             );
             throw e;
@@ -114,6 +116,7 @@ public class UserService {
         }
     }
 
+    @Transactional
     public void changePassword(String correo, ChangePasswordRequest request, Sitio sitio, String ip) {
         Usuario user = usuarioService.getUsuarioEntityByCorreo(correo);
 
@@ -204,5 +207,20 @@ public class UserService {
                     e
             );
         }
+    }
+
+    @Transactional(readOnly = true)
+    public Page<UsuarioPendienteAsignacion> listarUsuariosPendientes(Pageable pageable) {
+        Page<Usuario> usuariosPendientes = usuarioService.getUsuariosByStatus(Status.PENDIENTE, pageable);
+
+        return usuariosPendientes.map(usuario -> new UsuarioPendienteAsignacion(
+                usuario.getId(),
+                usuario.getCorreo(),
+                usuario.getNombre(),
+                usuario.getApellidoPaterno(),
+                usuario.getApellidoMaterno(),
+                usuario.getFechaRegistro(),
+                usuario.getStatus()
+        ));
     }
 }

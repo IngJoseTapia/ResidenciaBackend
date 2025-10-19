@@ -58,59 +58,54 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest request, Sitio sitio, String ip) {
-        try {
-            // 1️⃣ Verificar bloqueo por IP
-            if (ipBlockService.estaBloqueada(ip)) {
-                loginLogService.registrarLogsCorreo(request.email(), Evento.LOGIN_FALLIDO, Resultado.BLOQUEADO, sitio, ip, "0");
-                throw new BloqueoException("La IP está bloqueada temporalmente por intentos fallidos.");
-            }
-
-            // 2️⃣ Intentar autenticación con Spring Security
-            try {
-                authenticationManager.authenticate(
-                        new UsernamePasswordAuthenticationToken(request.email(), request.password())
-                );
-            } catch (BadCredentialsException e) {
-                // ❌ Credenciales inválidas → registrar intento fallido
-                usuarioService.buscarUsuarioByCorreo(request.email()).ifPresent(usuario ->
-                        accountBlockService.registrarIntentoFallido(usuario, Evento.LOGIN_FALLIDO, ip)
-                );
-                ipBlockService.registrarIntentoFallido(ip);
-                loginLogService.registrarLogsCorreo(request.email(), Evento.LOGIN_FALLIDO, Resultado.FALLO, Sitio.WEB, ip, "2");
-                throw new BadCredentialsException("Contraseña incorrecta");
-            }
-
-            // 3️⃣ Obtener usuario autenticado (1 sola consulta)
-            Usuario usuario = usuarioService.buscarUsuarioByCorreo(request.email())
-                    .orElseThrow(() -> new UserNotFoundException("Usuario no encontrado"));
-
-            // 4️⃣ Verificar si el usuario está bloqueado por evento LOGIN_FALLIDO
-            Optional<AccountBlock> bloqueoOpt = accountBlockService.obtenerBloqueoActivo(usuario, Evento.LOGIN_FALLIDO);
-            if (bloqueoOpt.isPresent() && bloqueoOpt.get().getBloqueadaHasta() != null) {
-                Date ahora = new Date();
-                if (bloqueoOpt.get().getBloqueadaHasta().after(ahora)) {
-                    loginLogService.registrarLogsUsuario(usuario, Evento.LOGIN_FALLIDO, Resultado.BLOQUEADO, sitio, ip, "2");
-                    throw new BloqueoException("La cuenta está bloqueada. Intente más tarde.");
-                }
-            }
-
-            // 5️⃣ Si hay bloqueos expirados → limpiar
-            accountBlockService.limpiarBloqueo(usuario, Evento.LOGIN_FALLIDO);
-            ipBlockService.limpiarIntentos(ip);
-
-            // 6️⃣ Generar token JWT
-            String jwt = jwtUtils.generateToken(usuario);
-            String refreshToken = jwtUtils.generateRefreshToken(usuario);
-
-            // 7️⃣ Registrar login exitoso
-            loginLogService.registrarLogsUsuario(usuario, Evento.LOGIN_EXITOSO, Resultado.EXITO, sitio, ip, null);
-
-            // 8️⃣ Retornar respuesta exitosa
-            return new AuthResponse(jwt, refreshToken, usuario.getRol());
-        } catch (Exception e) {
-            System.err.println("Error en login: " + e.getMessage());
-            throw new RuntimeException(e);
+        // 1️⃣ Verificar bloqueo por IP
+        if (ipBlockService.estaBloqueada(ip)) {
+            loginLogService.registrarLogsCorreo(request.email(), Evento.LOGIN_FALLIDO, Resultado.BLOQUEADO, sitio, ip, "0");
+            throw new BloqueoException("La IP está bloqueada temporalmente por intentos fallidos.");
         }
+
+        // 2️⃣ Intentar autenticación con Spring Security
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.email(), request.password())
+            );
+        } catch (BadCredentialsException e) {
+            // ❌ Credenciales inválidas → registrar intento fallido
+            usuarioService.buscarUsuarioByCorreo(request.email()).ifPresent(usuario ->
+                    accountBlockService.registrarIntentoFallido(usuario, Evento.LOGIN_FALLIDO, ip)
+            );
+            ipBlockService.registrarIntentoFallido(ip);
+            loginLogService.registrarLogsCorreo(request.email(), Evento.LOGIN_FALLIDO, Resultado.FALLO, Sitio.WEB, ip, "2");
+            throw new BadCredentialsException("Contraseña incorrecta");
+        }
+
+        // 3️⃣ Obtener usuario autenticado (1 sola consulta)
+        Usuario usuario = usuarioService.buscarUsuarioByCorreo(request.email())
+                .orElseThrow(() -> new UserNotFoundException("Usuario no encontrado"));
+
+        // 4️⃣ Verificar si el usuario está bloqueado por evento LOGIN_FALLIDO
+        Optional<AccountBlock> bloqueoOpt = accountBlockService.obtenerBloqueoActivo(usuario, Evento.LOGIN_FALLIDO);
+        if (bloqueoOpt.isPresent() && bloqueoOpt.get().getBloqueadaHasta() != null) {
+            Date ahora = new Date();
+            if (bloqueoOpt.get().getBloqueadaHasta().after(ahora)) {
+                loginLogService.registrarLogsUsuario(usuario, Evento.LOGIN_FALLIDO, Resultado.BLOQUEADO, sitio, ip, "2");
+                throw new BloqueoException("La cuenta está bloqueada. Intente más tarde.");
+            }
+        }
+
+        // 5️⃣ Si hay bloqueos expirados → limpiar
+        accountBlockService.limpiarBloqueo(usuario, Evento.LOGIN_FALLIDO);
+        ipBlockService.limpiarIntentos(ip);
+
+        // 6️⃣ Generar token JWT
+        String jwt = jwtUtils.generateToken(usuario);
+        String refreshToken = jwtUtils.generateRefreshToken(usuario);
+
+        // 7️⃣ Registrar login exitoso
+        loginLogService.registrarLogsUsuario(usuario, Evento.LOGIN_EXITOSO, Resultado.EXITO, sitio, ip, null);
+
+        // 8️⃣ Retornar respuesta exitosa
+        return new AuthResponse(jwt, refreshToken, usuario.getRol());
     }
 
     public AuthResponse loginWithGoogle(String correo, String nombre, Sitio sitio, String ip) {
