@@ -119,4 +119,14 @@ public class UsuarioService {
     public boolean existeUsuarioByCorreo(String correo) {
         return usuarioRepository.existsByCorreo(correo);
     }
+
+    public Usuario getUsuarioById(Long id) {
+        return usuarioRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException("Usuario no encontrado con id: " + id));
+    }
+
+    public void actualizarRolUsuario(Usuario usuario, Rol rol) {
+        usuario.setRol(rol);
+        createUser(usuario);
+    }
 }

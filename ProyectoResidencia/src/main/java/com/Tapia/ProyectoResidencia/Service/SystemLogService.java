@@ -136,7 +136,23 @@ public class SystemLogService {
             case ASIGNACION_VOCALIA_ERROR -> {
                 registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, id, ip);
             }
-
+            case UPDATE_ROL_USUARIO_EXITOSO -> {
+                descripcion = "Asignación de nuevo rol a usuario exitosa: ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case UPDATE_ROL_USUARIO_FALLIDO -> {
+                descripcion = "Solo se pueden modificar roles de usuarios con status ACTIVO";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+            }
+            case UPDATE_ROL_USUARIO_ERROR -> {
+                if (id.equals("1")){
+                    descripcion = "El usuario ya posee el rol";
+                    registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                } else if (id.equals("2")) {
+                    descripcion = "No se tienen los permisos para asignar roles jerárquicos";
+                    registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                }
+            }
         }
     }
 

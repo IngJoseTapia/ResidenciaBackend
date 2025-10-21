@@ -1,9 +1,6 @@
 package com.Tapia.ProyectoResidencia.Service;
 
-import com.Tapia.ProyectoResidencia.DTO.ChangePasswordRequest;
-import com.Tapia.ProyectoResidencia.DTO.UpdateUserRequest;
-import com.Tapia.ProyectoResidencia.DTO.UserResponse;
-import com.Tapia.ProyectoResidencia.DTO.UsuarioPendienteAsignacion;
+import com.Tapia.ProyectoResidencia.DTO.*;
 import com.Tapia.ProyectoResidencia.Enum.*;
 import com.Tapia.ProyectoResidencia.Exception.*;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
@@ -14,6 +11,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionSystemException;
@@ -21,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Date;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -222,5 +221,76 @@ public class UserService {
                 usuario.getFechaRegistro(),
                 usuario.getStatus()
         ));
+    }
+
+    // Listar usuarios activos (paginado)
+    @Transactional(readOnly = true)
+    public Page<UsuarioActivoResponse> listarUsuariosActivos(Pageable pageable) {
+        Page<Usuario> usuariosActivos = usuarioService.getUsuariosByStatus(Status.ACTIVO, pageable);
+
+        return usuariosActivos.map(usuario -> new UsuarioActivoResponse(
+                usuario.getId(),
+                usuario.getCorreo(),
+                usuario.getNombre(),
+                usuario.getApellidoPaterno(),
+                usuario.getApellidoMaterno(),
+                usuario.getRol(),
+                usuario.getFechaRegistro(),
+                usuario.getStatus()
+        ));
+    }
+
+    // Cambiar rol de usuario (ADMIN)
+    @Transactional
+    public void cambiarRolUsuarioActivo(Long usuarioId, ChangeRoleRequest request, Authentication auth, Sitio sitio, String ip) {
+        Usuario usuario = usuarioService.getUsuarioById(usuarioId);
+        Rol nuevoRol = request.rol();
+        Rol rolAnterior = usuario.getRol();
+
+        // Obtener usuario autenticado
+        String correoAuth = auth.getName();
+        Usuario usuarioAuth = usuarioService.getUsuarioEntityByCorreo(correoAuth);
+
+        // Validación: solo usuarios con status ACTIVO pueden recibir cambios desde este módulo (según tu requerimiento)
+        if (usuario.getStatus() != Status.ACTIVO) {
+            systemLogService.registrarLogUsuario(usuario, Evento.UPDATE_ROL_USUARIO_FALLIDO, Resultado.FALLO, sitio, ip, null);
+            throw new InvalidOperationException("Solo se pueden modificar roles de usuarios con status ACTIVO");
+        }
+
+        // Si no hay cambio, no hacemos nada
+        if (Objects.equals(rolAnterior, nuevoRol)) {
+            systemLogService.registrarLogUsuario(usuario, Evento.UPDATE_ROL_USUARIO_ERROR, Resultado.FALLO, sitio, ip, "1");
+            // o lanzar una excepción si prefieres informar
+            throw new InvalidOperationException("El usuario ya posee este rol");
+        }
+
+        // 💡 Validar jerarquía según el rol del autenticado
+        if (!puedeAsignarRol(usuarioAuth.getRol(), nuevoRol)) {
+            systemLogService.registrarLogUsuario(usuario, Evento.UPDATE_ROL_USUARIO_ERROR, Resultado.FALLO, sitio, ip, "2");
+            throw new InvalidOperationException("No tienes permiso para asignar este rol");
+        }
+
+        // Actualizar el rol del usuario
+        usuarioService.actualizarRolUsuario(usuario, nuevoRol);
+
+        // Registrar logs/acciones (aprovecha systemLogService si quieres)
+        systemLogService.registrarLogUsuario(
+                usuarioAuth,
+                Evento.UPDATE_ROL_USUARIO_EXITOSO, // crea este enum si no existe
+                Resultado.EXITO,
+                sitio,
+                ip,
+                "Rol cambiado de " + rolAnterior + " a " + nuevoRol + " para " + (usuario.getCorreo() != null ? usuario.getCorreo() : "Usuario desconocido")
+        );
+
+        // Opcional: si necesitas notificar al usuario del cambio
+    }
+
+    private boolean puedeAsignarRol(Rol rolAutenticado, Rol rolDestino) {
+        return switch (rolAutenticado) {
+            case ADMIN -> true; // Admin puede asignar cualquier rol
+            case VOCAL -> rolDestino != Rol.ADMIN && rolDestino != Rol.VOCAL; // Vocal no puede asignar su propio rol ni superior
+            default -> false; // Otros roles no pueden cambiar roles
+        };
     }
 }

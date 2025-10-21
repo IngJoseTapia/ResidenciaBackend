@@ -181,4 +181,11 @@ public class GlobalExceptionHandler {
                 .body(new ApiResponse("Ocurrió un problema al enviar notificación por correo: " + ex.getMessage(),
                         HttpStatus.OK.value()));
     }
+
+    @ExceptionHandler(InvalidOperationException.class)
+    public ResponseEntity<ApiResponse> handleInvalidOperation(InvalidOperationException ex) {
+        logger.log(Level.WARNING, "Operación no permitida: {0}", ex.getMessage());// ⚠️ Cambiado de FORBIDDEN a BAD_REQUEST
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse(ex.getMessage(), HttpStatus.BAD_REQUEST.value()));
+    }
 }

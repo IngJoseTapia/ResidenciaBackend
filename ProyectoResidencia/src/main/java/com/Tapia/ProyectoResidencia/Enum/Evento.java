@@ -56,6 +56,12 @@ public enum Evento {
     //Asignación de vocalías a usuarios
     ASIGNACION_VOCALIA_EXITOSO,
     ASIGNACION_VOCALIA_ERROR,
+
+    //Cambio de rol a usuarios
+    UPDATE_ROL_USUARIO_EXITOSO,
+    UPDATE_ROL_USUARIO_FALLIDO,
+    UPDATE_ROL_USUARIO_ERROR,
+
     //
     DESCONOCIDO
 }
