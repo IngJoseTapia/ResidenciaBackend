@@ -33,7 +33,7 @@ public class Notification {
     private NotificationTemplate template; // <-- NUEVO
 
     @ManyToOne
-    @JoinColumn(name = "emisor_id")
+    @JoinColumn(name = "emisor_id", nullable = true)
     private Usuario emisor;
 
     @Enumerated(EnumType.STRING)
@@ -46,4 +46,8 @@ public class Notification {
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime fechaCreacion;
+
+    @ManyToOne
+    @JoinColumn(name = "emisor_eliminado_id", nullable = true)
+    private UsuarioEliminado emisorEliminado;
 }

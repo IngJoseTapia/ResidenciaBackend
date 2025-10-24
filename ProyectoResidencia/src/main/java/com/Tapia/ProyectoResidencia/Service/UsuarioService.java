@@ -12,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.*;
@@ -100,10 +101,6 @@ public class UsuarioService {
                 .orElseThrow(() -> new UserNotFoundException("Usuario no encontrado"));
     }
 
-    public List<Usuario> listarUsuarios() {
-        return usuarioRepository.findAll();
-    }
-
     public Page<Usuario> getUsuariosByStatus(Status status, Pageable pageable) {
         return usuarioRepository.findByStatus(status, pageable);
     }
@@ -128,5 +125,15 @@ public class UsuarioService {
     public void actualizarRolUsuario(Usuario usuario, Rol rol) {
         usuario.setRol(rol);
         createUser(usuario);
+    }
+
+    // Eliminar usuario
+    public void eliminarUsuario(Usuario usuario) {
+        usuarioRepository.delete(usuario);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Usuario> getTodosUsuarios(Pageable pageable) {
+        return usuarioRepository.findAll(pageable);
     }
 }

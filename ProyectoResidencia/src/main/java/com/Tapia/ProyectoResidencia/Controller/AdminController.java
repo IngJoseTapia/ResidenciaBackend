@@ -90,4 +90,35 @@ public class AdminController {
         Page<UsuarioPendienteAsignacion> usuariosPendientes = userService.listarUsuariosPendientes(pageable);
         return ResponseEntity.ok(usuariosPendientes);
     }
+
+    @GetMapping("/usuarios")
+    public ResponseEntity<Page<UsuarioResumen>> listarTodosUsuarios(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<UsuarioResumen> usuarios = userService.listarTodosUsuarios(pageable);
+
+        return ResponseEntity.ok(usuarios);
+    }
+
+    // Elimina el registro de usuarios con status PENDIENTE
+    @DeleteMapping("/eliminar-pendiente/{id}")
+    public ResponseEntity<ApiResponse> eliminarUsuarioPendiente(@PathVariable Long id,
+                                                                Authentication auth,
+                                                                HttpServletRequest httpRequest) {
+        String ip = IpUtils.extractClientIp(httpRequest);
+        userService.eliminarUsuarioPendiente(id, auth, Sitio.WEB, ip);
+        return ResponseEntity.ok(new ApiResponse("Se eliminó el usuario correctamente ✅", HttpStatus.OK.value()));
+    }
+
+    // Elimina el registro de usuarios con status INACTIVO y conserva datos sensibles
+    @DeleteMapping("/eliminar/{id}")
+    public ResponseEntity<ApiResponse> eliminarUsuario(@PathVariable Long id,
+                                                       Authentication auth,
+                                                       HttpServletRequest httpRequest) {
+        String ip = IpUtils.extractClientIp(httpRequest);
+        userService.eliminarUsuario(id, auth, Sitio.WEB, ip);
+        return ResponseEntity.ok(new ApiResponse("Se eliminó el usuario correctamente ✅", HttpStatus.OK.value()));
+    }
 }

@@ -22,7 +22,7 @@ public class NotificacionUsuario {
     private Notification notificacion;
 
     @ManyToOne
-    @JoinColumn(name = "usuario_id", nullable = false)
+    @JoinColumn(name = "usuario_id")
     private Usuario usuario;
 
     @Column(nullable = false)
@@ -37,4 +37,8 @@ public class NotificacionUsuario {
     @CreationTimestamp
     @Column(nullable = false, updatable = false, columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")
     private LocalDateTime fechaRecepcion;
+
+    @ManyToOne
+    @JoinColumn(name = "usuario_eliminado_id")
+    private UsuarioEliminado usuarioEliminado;
 }

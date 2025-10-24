@@ -62,6 +62,16 @@ public enum Evento {
     UPDATE_ROL_USUARIO_FALLIDO,
     UPDATE_ROL_USUARIO_ERROR,
 
+    //Eliminar registro de la entidad Usuario
+    DELETE_USUARIO_EXITOSO,
+    DELETE_USUARIO_FALLIDO,
+    DELETE_USUARIO_ERROR,
+
+    //Respaldo de usuarios eliminados (auditoria)
+    RESPALDO_USER_EXITOSO,
+    RESPALDO_USER_FALLIDO,
+    RESPALDO_USER_ERROR,
+
     //
     DESCONOCIDO
 }

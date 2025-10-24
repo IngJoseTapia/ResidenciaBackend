@@ -4,6 +4,7 @@ import com.Tapia.ProyectoResidencia.DTO.*;
 import com.Tapia.ProyectoResidencia.Enum.*;
 import com.Tapia.ProyectoResidencia.Exception.*;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
+import com.Tapia.ProyectoResidencia.Model.UsuarioEliminado;
 import com.Tapia.ProyectoResidencia.Utils.PasswordUtils;
 import jakarta.validation.ConstraintViolationException;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ public class UserService {
     private final IpBlockService ipBlockService;
     private final NotificacionService notificacionService;
     private final UsuarioService usuarioService;
+    private final UsuarioEliminadoService usuarioEliminadoService;
 
     public UserResponse getUserByCorreo(String correo) {
         Usuario user = usuarioService.getUsuarioEntityByCorreo(correo);
@@ -284,6 +286,102 @@ public class UserService {
         );
 
         // Opcional: si necesitas notificar al usuario del cambio
+    }
+
+    @Transactional(readOnly = true)
+    public Page<UsuarioResumen> listarTodosUsuarios(Pageable pageable) {
+        Page<Usuario> usuarios = usuarioService.getTodosUsuarios(pageable);
+
+        return usuarios.map(usuario -> new UsuarioResumen(
+                usuario.getId(),
+                usuario.getCorreo(),
+                usuario.getNombre(),
+                usuario.getApellidoPaterno(),
+                usuario.getApellidoMaterno(),
+                usuario.getRol(),
+                usuario.getStatus(),
+                usuario.getTelefono(),
+                usuario.getGenero(),
+                usuario.getFechaRegistro()
+        ));
+    }
+
+    // 🔹 Eliminación directa de usuarios PENDIENTES
+    @Transactional
+    public void eliminarUsuarioPendiente(Long usuarioId, Authentication auth, Sitio sitio, String ip) {
+        Usuario usuario = usuarioService.getUsuarioById(usuarioId);
+
+        // Obtener usuario autenticado
+        String correoAuth = auth.getName();
+        Usuario usuarioAuth = usuarioService.getUsuarioEntityByCorreo(correoAuth);
+
+        if (usuario.getStatus() != Status.PENDIENTE) {
+            systemLogService.registrarLogUsuario(usuarioAuth, Evento.DELETE_USUARIO_FALLIDO, Resultado.FALLO, sitio, ip, "1");
+            throw new InvalidOperationException("Solo usuarios con status PENDIENTE pueden eliminarse con esta función.");
+        }
+
+        try {
+            // 🧹 1️⃣ Eliminar relaciones con notificaciones del sistema
+            notificacionService.eliminarRelacionesSistemaPorUsuario(usuario);
+
+            // 🧹 2️⃣ Romper vínculos de envío (por seguridad)
+            usuario.getNotificacionesEnviadas().forEach(n -> n.setEmisor(null));
+
+            // 🧹 3️⃣ Eliminar usuario de la tabla principal
+            usuarioService.eliminarUsuario(usuario);
+
+            // 🧾 4️⃣ Registrar logs
+            systemLogService.registrarLogUsuario(usuarioAuth, Evento.DELETE_USUARIO_EXITOSO, Resultado.EXITO, sitio, ip, "1");
+
+        } catch (Exception e) {
+            systemLogService.registrarLogUsuario(usuarioAuth, Evento.DELETE_USUARIO_ERROR, Resultado.FALLO, sitio, ip, e.getMessage());
+            throw e;
+        }
+    }
+
+    // 🔹 Eliminación controlada de usuarios INACTIVOS o validación para otros status
+    @Transactional
+    public void eliminarUsuario(Long usuarioId, Authentication auth, Sitio sitio, String ip) {
+        Usuario usuario = usuarioService.getUsuarioById(usuarioId);
+
+        // Obtener usuario autenticado
+        String correoAuth = auth.getName();
+        Usuario usuarioAuth = usuarioService.getUsuarioEntityByCorreo(correoAuth);
+
+        switch (usuario.getStatus()) {
+            case PENDIENTE -> {
+                systemLogService.registrarLogUsuario(usuarioAuth, Evento.DELETE_USUARIO_FALLIDO, Resultado.FALLO, sitio, ip, "2");
+                throw new InvalidOperationException(
+                        "Para eliminar este registro se debe de hacer desde el módulo de Usuarios Pendientes"
+                );
+            }
+            case ACTIVO -> {
+                systemLogService.registrarLogUsuario(usuarioAuth, Evento.DELETE_USUARIO_FALLIDO, Resultado.FALLO, sitio, ip, "3");
+                throw new InvalidOperationException(
+                        "Se debe cambiar el status del usuario a INACTIVO antes de eliminar"
+                );
+            }
+            case INACTIVO -> {
+                // 1️⃣ Crear registro en UsuarioEliminado
+                UsuarioEliminado usuarioEliminado = usuarioEliminadoService.guardarRegistro(usuario);
+                systemLogService.registrarLogUsuario(usuarioAuth, Evento.RESPALDO_USER_EXITOSO, Resultado.EXITO, sitio, ip, null);
+
+                // 2️⃣ Procesar relaciones de notificaciones
+                notificacionService.eliminarRelacionesSistemaPorUsuario(usuario);
+                notificacionService.redirigirRelacionesAdministrativas(usuario, usuarioEliminado);
+
+                // 3️⃣ Limpiar referencias de emisor en las notificaciones enviadas
+                usuario.getNotificacionesEnviadas().forEach(n -> n.setEmisor(null));
+
+                // 3️⃣ Eliminar usuario de la entidad principal
+                usuarioService.eliminarUsuario(usuario);
+                systemLogService.registrarLogUsuario(usuarioAuth, Evento.DELETE_USUARIO_EXITOSO, Resultado.EXITO, sitio, ip, "2");
+            }
+            default -> {
+                systemLogService.registrarLogUsuario(usuarioAuth, Evento.DELETE_USUARIO_FALLIDO, Resultado.FALLO, sitio, ip, "4");
+                throw new InvalidOperationException("Status de usuario no válido para eliminación.");
+            }
+        }
     }
 
     private boolean puedeAsignarRol(Rol rolAutenticado, Rol rolDestino) {

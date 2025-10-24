@@ -155,4 +155,54 @@ public class NotificacionService {
 
         // ❌ No tocar la tabla Notification, para mantener la notificación del sistema global
     }
+
+    @Transactional
+    public void eliminarRelacionesSistemaPorUsuario(Usuario usuario) {
+        // Buscar todas las relaciones de notificaciones del usuario
+        List<NotificacionUsuario> relacionesUsuario =
+                notificacionUsuarioRepository.findByUsuarioId(usuario.getId());
+
+        if (relacionesUsuario.isEmpty()) return;
+
+        // Filtrar las que provienen de notificaciones de tipo SISTEMA
+        List<NotificacionUsuario> relacionesSistema = relacionesUsuario.stream()
+                .filter(rel -> rel.getNotificacion() != null &&
+                        rel.getNotificacion().getTipo() == TipoNotificacion.SISTEMA)
+                .collect(Collectors.toList());
+
+        if (!relacionesSistema.isEmpty()) {
+            // 💥 Eliminar directamente los registros de la tabla notificacion_usuario
+            notificacionUsuarioRepository.deleteAll(relacionesSistema);
+            notificacionUsuarioRepository.flush();
+        }
+    }
+
+    @Transactional
+    public void redirigirRelacionesAdministrativas(Usuario usuario, UsuarioEliminado usuarioEliminado) {
+        // 1️⃣ Buscar todas las relaciones vinculadas al usuario
+        List<NotificacionUsuario> relaciones = notificacionUsuarioRepository.findByUsuarioId(usuario.getId());
+
+        if (relaciones.isEmpty()) return;
+
+        for (NotificacionUsuario relacion : relaciones) {
+            Notification notificacion = relacion.getNotificacion();
+
+            if (notificacion == null) continue;
+
+            // 2️⃣ Si es una notificación creada por ADMIN → redirigir
+            if (notificacion.getTipo() == TipoNotificacion.ADMIN) {
+                relacion.setUsuario(null);
+                relacion.setUsuarioEliminado(usuarioEliminado);
+                notificacionUsuarioRepository.save(relacion);
+
+                // 3️⃣ Si es una notificación del SISTEMA → eliminar relación
+            } else if (notificacion.getTipo() == TipoNotificacion.SISTEMA) {
+                notificacionUsuarioRepository.delete(relacion);
+            }
+        }
+
+        // 4️⃣ Forzar sincronización con la base de datos
+        notificacionUsuarioRepository.flush();
+    }
+
 }

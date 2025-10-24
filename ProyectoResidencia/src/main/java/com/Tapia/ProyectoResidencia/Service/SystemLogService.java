@@ -17,6 +17,7 @@ import java.util.Date;
 @RequiredArgsConstructor
 public class SystemLogService {
     public final SystemLogRepository systemLogRepository;
+    private final SystemLogTransactionalService logTransactionalService;
 
     public void registrarLogUsuario(Usuario usuario, Evento evento, Resultado resultado, Sitio sitio, String ip, String id){
         String descripcion;
@@ -26,7 +27,7 @@ public class SystemLogService {
                 descripcion = "Actualización de datos personales exitosa";
                 registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
             }
-            case UPDATE_INFO_USUARIO_FALLIDO ->
+            case UPDATE_INFO_USUARIO_FALLIDO, DELETE_USUARIO_ERROR, ASIGNACION_VOCALIA_ERROR ->
                 registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, id, ip);
             case PASSWORD_CHANGE_FALLIDO -> {
                 switch (id) {
@@ -133,9 +134,6 @@ public class SystemLogService {
                 descripcion = "Vinculación de vocalía a usuario exitosa";
                 registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
             }
-            case ASIGNACION_VOCALIA_ERROR -> {
-                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, id, ip);
-            }
             case UPDATE_ROL_USUARIO_EXITOSO -> {
                 descripcion = "Asignación de nuevo rol a usuario exitosa: ";
                 registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
@@ -152,6 +150,39 @@ public class SystemLogService {
                     descripcion = "No se tienen los permisos para asignar roles jerárquicos";
                     registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
                 }
+            }
+            case DELETE_USUARIO_EXITOSO -> {
+                if (id.equals("1")){
+                    descripcion = "Usuario con status PENDIENTE eliminado correctamente";
+                    registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                } else if (id.equals("2")) {
+                    descripcion = "No se tienen los permisos para asignar roles jerárquicos";
+                    registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                }
+            }
+            case DELETE_USUARIO_FALLIDO -> {
+                switch (id) {
+                    case "1" -> {
+                        descripcion = "Solo usuarios con status PENDIENTE pueden eliminarse con esta función";
+                        logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                    }
+                    case "2" -> {
+                        descripcion = "Para eliminar este registro se debe de hacer desde el módulo de usuarios pendientes";
+                        logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                    }
+                    case "3" -> {
+                        descripcion = "Se debe cambiar el status del usuario a INACTIVO antes de eliminar";
+                        logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                    }
+                    case "4" -> {
+                        descripcion = "Ocurrió un fallo durante el proceso de eliminar el registro (Posiblemente status nulo o invalido)";
+                        logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                    }
+                }
+            }
+            case RESPALDO_USER_EXITOSO -> {
+                descripcion = "Respaldo de Usuario Eliminado registrado correctamente";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
             }
         }
     }

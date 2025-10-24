@@ -1,6 +1,7 @@
 package com.Tapia.ProyectoResidencia.Model;
 
 import com.Tapia.ProyectoResidencia.Enum.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.Data;
@@ -48,7 +49,7 @@ public class Usuario {
     @Enumerated(EnumType.STRING)
     private Rol rol; //Rol del usuario
 
-    @NotNull(message = "El género debe ser Masculino, Femenino u Otro")
+    @NotBlank(message = "El género debe ser Masculino, Femenino u Otro")
     @Pattern(regexp = "^(Masculino|Femenino|Otro)$", message = "El género debe ser Masculino, Femenino u Otro")
     private String genero; //Genero del usuario
 
@@ -60,10 +61,11 @@ public class Usuario {
     @Temporal(TemporalType.TIMESTAMP)
     private Date fechaRegistro; //Fecha en que se dio de alta la cuenta del usuario
 
-    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "usuario", orphanRemoval = true)
     private List<PasswordResetToken> passwordResetTokens = new ArrayList<>();
 
-    @OneToMany(mappedBy = "usuario", /*cascade = CascadeType.ALL,*/ orphanRemoval = true)
+    @OneToMany(mappedBy = "usuario")
+    @JsonIgnore
     private List<NotificacionUsuario> notificacionesRecibidas = new ArrayList<>();
 
     @OneToMany(mappedBy = "emisor")
