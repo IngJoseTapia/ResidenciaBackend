@@ -1,6 +1,8 @@
 package com.Tapia.ProyectoResidencia.Service;
 
 import com.Tapia.ProyectoResidencia.DTO.ChangePasswordRequest;
+import com.Tapia.ProyectoResidencia.DTO.UpdateUserEmailRequest;
+import com.Tapia.ProyectoResidencia.DTO.UpdateUserPasswordRequest;
 import com.Tapia.ProyectoResidencia.DTO.UpdateUserRequest;
 import com.Tapia.ProyectoResidencia.Enum.*;
 import com.Tapia.ProyectoResidencia.Exception.UserNotFoundException;
@@ -105,10 +107,6 @@ public class UsuarioService {
         return usuarioRepository.findByStatus(status, pageable);
     }
 
-    private Usuario createUser(Usuario usuario){
-        return usuarioRepository.save(usuario);
-    }
-
     public Optional<Usuario> buscarUsuarioByCorreo(String correo) {
         return usuarioRepository.findByCorreo(correo);
     }
@@ -132,8 +130,33 @@ public class UsuarioService {
         usuarioRepository.delete(usuario);
     }
 
+    public void actualizarCorreoUsuario(Usuario usuario, UpdateUserEmailRequest request) {
+        usuario.setCorreo(request.nuevoCorreo());
+        createUser(usuario);
+    }
+
     @Transactional(readOnly = true)
     public Page<Usuario> getTodosUsuarios(Pageable pageable) {
         return usuarioRepository.findAll(pageable);
+    }
+
+    @Transactional
+    public void actualizarContrasenaAdministrador(Usuario usuario, UpdateUserPasswordRequest request) {
+        usuario.setContrasena(passwordEncoder.encode(request.nuevaPassword()));
+        createUser(usuario);
+    }
+
+    @Transactional
+    public void actualizarStatusAdministrador(Usuario usuario, Status nuevoStatus) {
+        if (usuario.getStatus() == nuevoStatus) {
+            throw new IllegalArgumentException("El usuario ya tiene el status " + nuevoStatus);
+        }
+
+        usuario.setStatus(nuevoStatus);
+        createUser(usuario);
+    }
+
+    private Usuario createUser(Usuario usuario){
+        return usuarioRepository.save(usuario);
     }
 }

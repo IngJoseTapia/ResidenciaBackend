@@ -7,6 +7,8 @@ import com.Tapia.ProyectoResidencia.Model.Usuario;
 import com.Tapia.ProyectoResidencia.Repository.EmailLogRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,10 @@ public class EmailLogService {
     @Value("${app.admin.emails}") // lista separada por comas
     private String adminEmails;
     private final EmailLogRepository emailLogRepository;
+
+    public Page<EmailLog> listarLogsCorreo(Pageable pageable) {
+        return emailLogRepository.findAllByOrderByFechaEnvioDesc(pageable);
+    }
 
     public void notificarAdministradores(Usuario usuario, Evento evento, Date desbloqueo, String ip){
         String asunto;

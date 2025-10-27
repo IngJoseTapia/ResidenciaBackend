@@ -72,6 +72,20 @@ public enum Evento {
     RESPALDO_USER_FALLIDO,
     RESPALDO_USER_ERROR,
 
+    //Actualizar correo de usuario (ADMIN)
+    UPDATE_EMAIL_USUARIO_EXITOSO,
+    UPDATE_EMAIL_USUARIO_FALLIDO,
+    UPDATE_EMAIL_USUARIO_ERROR,
+
+    //Actualizar contraseña de usuario (ADMIN)
+    UPDATE_PASSWORD_ADMIN_EXITOSO,
+    UPDATE_PASSWORD_ADMIN_FALLIDO,
+    UPDATE_PASSWORD_ADMIN_ERROR,
+
+    //Actualizar status de usuario (ADMIN)
+    UPDATE_STATUS_ADMIN_EXITOSO,
+    UPDATE_STATUS_ADMIN_ERROR,
+
     //
     DESCONOCIDO
 }

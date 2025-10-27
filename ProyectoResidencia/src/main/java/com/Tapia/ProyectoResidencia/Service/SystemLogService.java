@@ -8,6 +8,9 @@ import com.Tapia.ProyectoResidencia.Model.SystemLog;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
 import com.Tapia.ProyectoResidencia.Repository.SystemLogRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -19,6 +22,13 @@ public class SystemLogService {
     public final SystemLogRepository systemLogRepository;
     private final SystemLogTransactionalService logTransactionalService;
 
+    // Nuevo método de consulta paginada
+    public Page<SystemLog> listarLogsSistema(Pageable pageable) {
+        int pageSize = Math.min(pageable.getPageSize(), 100); // Límite de seguridad
+        Pageable safePageable = PageRequest.of(pageable.getPageNumber(), pageSize);
+        return systemLogRepository.findAllByOrderByFechaActividadDesc(safePageable);
+    }
+
     public void registrarLogUsuario(Usuario usuario, Evento evento, Resultado resultado, Sitio sitio, String ip, String id){
         String descripcion;
 
@@ -27,8 +37,8 @@ public class SystemLogService {
                 descripcion = "Actualización de datos personales exitosa";
                 registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
             }
-            case UPDATE_INFO_USUARIO_FALLIDO, DELETE_USUARIO_ERROR, ASIGNACION_VOCALIA_ERROR ->
-                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, id, ip);
+            case UPDATE_INFO_USUARIO_FALLIDO, DELETE_USUARIO_ERROR, ASIGNACION_VOCALIA_ERROR, UPDATE_EMAIL_USUARIO_ERROR, UPDATE_PASSWORD_ADMIN_ERROR, UPDATE_STATUS_ADMIN_ERROR ->
+                logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, id, ip);
             case PASSWORD_CHANGE_FALLIDO -> {
                 switch (id) {
                     case "0" -> {
@@ -183,6 +193,26 @@ public class SystemLogService {
             case RESPALDO_USER_EXITOSO -> {
                 descripcion = "Respaldo de Usuario Eliminado registrado correctamente";
                 registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+            }
+            case UPDATE_EMAIL_USUARIO_EXITOSO -> {
+                descripcion = "Correo cambiado de ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case UPDATE_EMAIL_USUARIO_FALLIDO -> {
+                descripcion = "Correo ya registrado, esta en uso por otro usuario";
+                logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+            }
+            case UPDATE_PASSWORD_ADMIN_EXITOSO -> {
+                descripcion = "Contraseña actualizada por administrador para el usuario: ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case UPDATE_PASSWORD_ADMIN_FALLIDO -> {
+                descripcion = "La contraseña no cumple los criterios de seguridad";
+                logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+            }
+            case UPDATE_STATUS_ADMIN_EXITOSO -> {
+                descripcion = "El administrador cambió el status del usuario ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
             }
         }
     }

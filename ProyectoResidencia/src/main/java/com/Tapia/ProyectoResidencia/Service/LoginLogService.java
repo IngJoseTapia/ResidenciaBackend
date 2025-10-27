@@ -5,6 +5,9 @@ import com.Tapia.ProyectoResidencia.Model.LoginLog;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
 import com.Tapia.ProyectoResidencia.Repository.LoginLogRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -15,6 +18,12 @@ import java.util.Date;
 public class LoginLogService {
 
     private final LoginLogRepository loginLogRepository;
+
+    public Page<LoginLog> listarLogsLogin(Pageable pageable) {
+        int pageSize = Math.min(pageable.getPageSize(), 100);
+        Pageable safePageable = PageRequest.of(pageable.getPageNumber(), pageSize);
+        return loginLogRepository.findAllByOrderByFechaActividadDesc(safePageable);
+    }
 
     public void registrarLogsUsuario(Usuario usuario, Evento evento, Resultado resultado, Sitio sitio, String ip, String id) {
         String descripcion;

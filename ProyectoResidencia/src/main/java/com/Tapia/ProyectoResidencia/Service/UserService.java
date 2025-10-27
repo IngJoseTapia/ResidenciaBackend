@@ -362,25 +362,127 @@ public class UserService {
                 );
             }
             case INACTIVO -> {
-                // 1️⃣ Crear registro en UsuarioEliminado
-                UsuarioEliminado usuarioEliminado = usuarioEliminadoService.guardarRegistro(usuario);
-                systemLogService.registrarLogUsuario(usuarioAuth, Evento.RESPALDO_USER_EXITOSO, Resultado.EXITO, sitio, ip, null);
+                try {
+                    // 1️⃣ Crear registro en UsuarioEliminado
+                    UsuarioEliminado usuarioEliminado = usuarioEliminadoService.guardarRegistro(usuario);
+                    systemLogService.registrarLogUsuario(usuarioAuth, Evento.RESPALDO_USER_EXITOSO, Resultado.EXITO, sitio, ip, null);
 
-                // 2️⃣ Procesar relaciones de notificaciones
-                notificacionService.eliminarRelacionesSistemaPorUsuario(usuario);
-                notificacionService.redirigirRelacionesAdministrativas(usuario, usuarioEliminado);
+                    // 2️⃣ Procesar relaciones de notificaciones
+                    notificacionService.eliminarRelacionesSistemaPorUsuario(usuario);
+                    notificacionService.redirigirRelacionesAdministrativas(usuario, usuarioEliminado);
 
-                // 3️⃣ Limpiar referencias de emisor en las notificaciones enviadas
-                usuario.getNotificacionesEnviadas().forEach(n -> n.setEmisor(null));
+                    // 3️⃣ Limpiar referencias de emisor en las notificaciones enviadas
+                    usuario.getNotificacionesEnviadas().forEach(n -> n.setEmisor(null));
 
-                // 3️⃣ Eliminar usuario de la entidad principal
-                usuarioService.eliminarUsuario(usuario);
-                systemLogService.registrarLogUsuario(usuarioAuth, Evento.DELETE_USUARIO_EXITOSO, Resultado.EXITO, sitio, ip, "2");
+                    // 3️⃣ Eliminar usuario de la entidad principal
+                    usuarioService.eliminarUsuario(usuario);
+                    systemLogService.registrarLogUsuario(usuarioAuth, Evento.DELETE_USUARIO_EXITOSO, Resultado.EXITO, sitio, ip, "2");
+                } catch (DataIntegrityViolationException e) {
+                    systemLogService.registrarLogUsuario(usuarioAuth, Evento.DELETE_USUARIO_ERROR, Resultado.FALLO, sitio, ip,
+                            "Error de integridad referencial: " + e.getMostSpecificCause().getMessage());
+                    throw new InvalidOperationException("No se pudo eliminar el usuario debido a relaciones activas en el sistema.");
+                } catch (Exception e) {
+                    systemLogService.registrarLogUsuario(usuarioAuth, Evento.DELETE_USUARIO_ERROR, Resultado.FALLO, sitio, ip, e.getMessage());
+                    throw e; // deja que el handler global lo capture
+                }
             }
             default -> {
                 systemLogService.registrarLogUsuario(usuarioAuth, Evento.DELETE_USUARIO_FALLIDO, Resultado.FALLO, sitio, ip, "4");
                 throw new InvalidOperationException("Status de usuario no válido para eliminación.");
             }
+        }
+    }
+
+    @Transactional
+    public void actualizarCorreoUsuario(Long usuarioId, UpdateUserEmailRequest request, Authentication auth, Sitio sitio, String ip) {
+        Usuario usuario = usuarioService.getUsuarioById(usuarioId);
+
+        // Obtener usuario autenticado
+        String correoAuth = auth.getName();
+        Usuario usuarioAuth = usuarioService.getUsuarioEntityByCorreo(correoAuth);
+
+        // Validar que el correo no exista
+        if (!usuario.getCorreo().equals(request.nuevoCorreo()) && usuarioService.existeUsuarioByCorreo(request.nuevoCorreo())) {
+            systemLogService.registrarLogUsuario(usuarioAuth, Evento.UPDATE_EMAIL_USUARIO_FALLIDO, Resultado.FALLO, sitio, ip, null);
+            throw new InvalidOperationException("El correo ya está registrado por otro usuario");
+        }
+
+        String correoAnterior = usuario.getCorreo();
+
+        try {
+            // Guardar cambios mediante UsuarioService
+            usuarioService.actualizarCorreoUsuario(usuario, request);
+
+            // Registrar log
+            systemLogService.registrarLogUsuario(usuarioAuth, Evento.UPDATE_EMAIL_USUARIO_EXITOSO, Resultado.EXITO, sitio, ip,
+                    correoAnterior + " a " + request.nuevoCorreo()
+            );
+        } catch (DataIntegrityViolationException e) {
+            systemLogService.registrarLogUsuario(usuarioAuth, Evento.UPDATE_EMAIL_USUARIO_ERROR, Resultado.FALLO, sitio, ip,
+                    "Violación de integridad: " + e.getMostSpecificCause().getMessage());
+            throw new InvalidOperationException("No se pudo actualizar el correo debido a un conflicto en la base de datos.");
+        } catch (OptimisticLockingFailureException e) {
+            systemLogService.registrarLogUsuario(usuarioAuth, Evento.UPDATE_EMAIL_USUARIO_ERROR, Resultado.FALLO, sitio, ip,
+                    "Conflicto de concurrencia");
+            throw new InvalidOperationException("Otro administrador modificó este usuario al mismo tiempo. Intente nuevamente.");
+        }
+    }
+
+    @Transactional
+    public void actualizarContrasenaUsuario(Long usuarioId, UpdateUserPasswordRequest request, Authentication auth, Sitio sitio, String ip) {
+        Usuario usuario = usuarioService.getUsuarioById(usuarioId);
+
+        // Obtener usuario autenticado
+        String correoAuth = auth.getName();
+        Usuario usuarioAuth = usuarioService.getUsuarioEntityByCorreo(correoAuth);
+
+        // ✅ Validar fuerza de la contraseña antes de guardarla
+        if (PasswordUtils.isWeakPassword(request.nuevaPassword())) {
+            systemLogService.registrarLogUsuario(usuarioAuth, Evento.UPDATE_PASSWORD_ADMIN_FALLIDO, Resultado.FALLO, sitio, ip, null);
+            throw new WeakPasswordException("La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula, un número y un carácter especial.");
+        }
+
+        try {
+            usuarioService.actualizarContrasenaAdministrador(usuario, request);
+            systemLogService.registrarLogUsuario(usuarioAuth, Evento.UPDATE_PASSWORD_ADMIN_EXITOSO, Resultado.EXITO, sitio, ip,
+                    usuario.getCorreo()
+            );
+        } catch (DataIntegrityViolationException e) {
+            systemLogService.registrarLogUsuario(usuarioAuth, Evento.UPDATE_PASSWORD_ADMIN_ERROR, Resultado.FALLO, sitio, ip,
+                    "Violación de integridad: " + e.getMostSpecificCause().getMessage()
+            );
+            throw new InvalidOperationException("No se pudo actualizar la contraseña debido a un conflicto en la base de datos.");
+
+        } catch (OptimisticLockingFailureException e) {
+            systemLogService.registrarLogUsuario(usuarioAuth, Evento.UPDATE_PASSWORD_ADMIN_ERROR, Resultado.FALLO, sitio, ip,
+                    "Conflicto de concurrencia al actualizar contraseña"
+            );
+            throw new InvalidOperationException("Otro administrador modificó este usuario al mismo tiempo. Intente nuevamente.");
+
+        } catch (Exception e) {
+            systemLogService.registrarLogUsuario(usuarioAuth, Evento.UPDATE_PASSWORD_ADMIN_ERROR, Resultado.FALLO, sitio, ip,
+                    "Error inesperado al actualizar contraseña: " + e.getMessage()
+            );
+            throw new PasswordChangeException("Ocurrió un error inesperado al actualizar la contraseña del usuario " + usuario.getCorreo());
+        }
+    }
+
+    @Transactional
+    public void actualizarStatusUsuario(Long usuarioId, UpdateUserStatusRequest request, Authentication auth, Sitio sitio, String ip) {
+        Usuario usuario = usuarioService.getUsuarioById(usuarioId);
+        String correoAuth = auth.getName();
+        Usuario usuarioAuth = usuarioService.getUsuarioEntityByCorreo(correoAuth);
+
+        try {
+            usuarioService.actualizarStatusAdministrador(usuario, request.nuevoStatus());
+            systemLogService.registrarLogUsuario(usuarioAuth, Evento.UPDATE_STATUS_ADMIN_EXITOSO, Resultado.EXITO, sitio, ip,
+                    usuario.getCorreo() + " → Nuevo estado: " + request.nuevoStatus()
+            );
+        } catch (Exception e) {
+            systemLogService.registrarLogUsuario(usuarioAuth, Evento.UPDATE_STATUS_ADMIN_ERROR, Resultado.FALLO, sitio, ip,
+                    "Error al cambiar el status del usuario: " + e.getMessage()
+            );
+            throw e;
         }
     }
 
