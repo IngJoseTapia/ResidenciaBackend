@@ -37,7 +37,9 @@ public class SystemLogService {
                 descripcion = "Actualización de datos personales exitosa";
                 registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
             }
-            case UPDATE_INFO_USUARIO_FALLIDO, DELETE_USUARIO_ERROR, ASIGNACION_VOCALIA_ERROR, UPDATE_EMAIL_USUARIO_ERROR, UPDATE_PASSWORD_ADMIN_ERROR, UPDATE_STATUS_ADMIN_ERROR ->
+            case UPDATE_INFO_USUARIO_FALLIDO, DELETE_USUARIO_ERROR, ASIGNACION_VOCALIA_ERROR,
+                 UPDATE_EMAIL_USUARIO_ERROR, UPDATE_PASSWORD_ADMIN_ERROR, UPDATE_STATUS_ADMIN_ERROR,
+                 CREATE_CONTRATO_ERROR, UPDATE_CONTRATO_ERROR, DELETE_CONTRATO_ERROR ->
                 logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, id, ip);
             case PASSWORD_CHANGE_FALLIDO -> {
                 switch (id) {
@@ -212,6 +214,34 @@ public class SystemLogService {
             }
             case UPDATE_STATUS_ADMIN_EXITOSO -> {
                 descripcion = "El administrador cambió el status del usuario ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case CREATE_CONTRATO_EXITOSO -> {
+                descripcion = "Contrato creado exitosamente: ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case CREATE_CONTRATO_FALLIDO, UPDATE_CONTRATO_FALLIDO -> {
+                switch (id) {
+                    case "1" -> {
+                        descripcion = "Ya existe un contrato con el código proporcionado";
+                        logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                    }
+                    case "2" -> {
+                        descripcion = "La fecha de conclusión no puede ser anterior a la fecha de inicio";
+                        logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                    }
+                    case "3" -> {
+                        descripcion = "El sueldo debe ser mayor que 0";
+                        logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                    }
+                }
+            }
+            case UPDATE_CONTRATO_EXITOSO -> {
+                descripcion = "Contrato actualizado exitosamente: ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case DELETE_CONTRATO_EXITOSO -> {
+                descripcion = "Contrato eliminado exitosamente: ";
                 registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
             }
         }

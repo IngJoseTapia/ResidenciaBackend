@@ -108,6 +108,16 @@ public class GlobalExceptionHandler {
                 .body(new ApiResponse(ex.getMessage(), HttpStatus.NOT_FOUND.value()));
     }
 
+    @ExceptionHandler(ContratoCreationException.class)
+    public ResponseEntity<ApiResponse> handleContratoCreation(ContratoCreationException ex) {
+        logger.log(Level.SEVERE, "Error al crear contrato: " + ex.getMessage(), ex);
+
+        HttpStatus status = ex.getStatus() != null ? ex.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+
+        return ResponseEntity.status(status)
+                .body(new ApiResponse("Error al crear el contrato: " + ex.getMessage(), status.value()));
+    }
+
     /**
      * Maneja cualquier RuntimeException no controlada.
      */

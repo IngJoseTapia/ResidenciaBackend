@@ -39,6 +39,7 @@ public class SecurityConfig {
                         .requestMatchers("/notifications/**").hasAnyRole("VOCAL", "ADMIN", "CAE", "SE", "USER")
                         .requestMatchers("/admin/**").hasAnyRole("ADMIN")
                         .requestMatchers("/vocal/**").hasAnyRole("ADMIN", "VOCAL")
+                        .requestMatchers("/rrhh/**").hasAnyRole("ADMIN", "RRHH")
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

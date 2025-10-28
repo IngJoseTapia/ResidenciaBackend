@@ -89,19 +89,16 @@ public class AdminController {
 
     // Obtener todos los usuarios con status PENDIENTE (solo ADMIN)
     @GetMapping("/pendientes")
-    public ResponseEntity<Page<UsuarioPendienteAsignacion>> listarUsuariosPendientes(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+    public ResponseEntity<Page<UsuarioPendienteAsignacion>> listarUsuariosPendientes(@RequestParam(defaultValue = "0") int page,
+                                                                                     @RequestParam(defaultValue = "20") int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<UsuarioPendienteAsignacion> usuariosPendientes = userService.listarUsuariosPendientes(pageable);
         return ResponseEntity.ok(usuariosPendientes);
     }
 
     @GetMapping("/usuarios")
-    public ResponseEntity<Page<UsuarioResumen>> listarTodosUsuarios(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-
+    public ResponseEntity<Page<UsuarioResumen>> listarTodosUsuarios(@RequestParam(defaultValue = "0") int page,
+                                                                    @RequestParam(defaultValue = "20") int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<UsuarioResumen> usuarios = userService.listarTodosUsuarios(pageable);
 
@@ -130,10 +127,8 @@ public class AdminController {
 
     //Listar todos los logs del login
     @GetMapping("/logs/login")
-    public ResponseEntity<Page<LoginLog>> listarLogsLogin(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size
-    ) {
+    public ResponseEntity<Page<LoginLog>> listarLogsLogin(@RequestParam(defaultValue = "0") int page,
+                                                          @RequestParam(defaultValue = "50") int size) {
         int maxSize = Math.min(size, 100); // Límite de seguridad
         Pageable pageable = PageRequest.of(page, maxSize);
         Page<LoginLog> logs = loginLogService.listarLogsLogin(pageable);
@@ -142,10 +137,8 @@ public class AdminController {
 
     // ✅ Listar todos los logs del sistema
     @GetMapping("/logs/sistema")
-    public ResponseEntity<Page<SystemLog>> listarLogsSistema(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size
-    ) {
+    public ResponseEntity<Page<SystemLog>> listarLogsSistema(@RequestParam(defaultValue = "0") int page,
+                                                             @RequestParam(defaultValue = "50") int size) {
         int maxSize = Math.min(size, 100);
         Pageable pageable = PageRequest.of(page, maxSize);
         Page<SystemLog> logs = systemLogService.listarLogsSistema(pageable);
@@ -154,10 +147,8 @@ public class AdminController {
 
     // ✅ Listar todos los logs de correos enviados
     @GetMapping("/logs/correos")
-    public ResponseEntity<Page<EmailLog>> listarLogsCorreos(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size
-    ) {
+    public ResponseEntity<Page<EmailLog>> listarLogsCorreos(@RequestParam(defaultValue = "0") int page,
+                                                            @RequestParam(defaultValue = "50") int size) {
         int maxSize = Math.min(size, 100); // Límite de seguridad
         Pageable pageable = PageRequest.of(page, maxSize);
         Page<EmailLog> logs = emailLogService.listarLogsCorreo(pageable);

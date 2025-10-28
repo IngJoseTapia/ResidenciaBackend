@@ -13,6 +13,6 @@ public enum Rol {
     AUXILIAR,
     MONITORISTA,
     VALIDADOR,
-    RH,
+    RRHH,
     DEFAULT
 }
