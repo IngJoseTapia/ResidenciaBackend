@@ -39,7 +39,8 @@ public class SystemLogService {
             }
             case UPDATE_INFO_USUARIO_FALLIDO, DELETE_USUARIO_ERROR, ASIGNACION_VOCALIA_ERROR,
                  UPDATE_EMAIL_USUARIO_ERROR, UPDATE_PASSWORD_ADMIN_ERROR, UPDATE_STATUS_ADMIN_ERROR,
-                 CREATE_CONTRATO_ERROR, UPDATE_CONTRATO_ERROR, DELETE_CONTRATO_ERROR ->
+                 CREATE_CONTRATO_ERROR, UPDATE_CONTRATO_ERROR, DELETE_CONTRATO_ERROR, ASIGNAR_CONTRATO_ERROR,
+                 UPDATE_VINCULO_CONTRATO_ERROR->
                 logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, id, ip);
             case PASSWORD_CHANGE_FALLIDO -> {
                 switch (id) {
@@ -197,7 +198,7 @@ public class SystemLogService {
                 registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
             }
             case UPDATE_EMAIL_USUARIO_EXITOSO -> {
-                descripcion = "Correo cambiado de ";
+                descripcion = "Correo cambiado de: ";
                 registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
             }
             case UPDATE_EMAIL_USUARIO_FALLIDO -> {
@@ -213,7 +214,7 @@ public class SystemLogService {
                 logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
             }
             case UPDATE_STATUS_ADMIN_EXITOSO -> {
-                descripcion = "El administrador cambió el status del usuario ";
+                descripcion = "El administrador cambió el status del usuario: ";
                 registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
             }
             case CREATE_CONTRATO_EXITOSO -> {
@@ -243,6 +244,39 @@ public class SystemLogService {
             case DELETE_CONTRATO_EXITOSO -> {
                 descripcion = "Contrato eliminado exitosamente: ";
                 registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case ASIGNAR_CONTRATO_EXITOSO -> {
+                descripcion = "Contrato asignado al usuario correctamente : ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case ASIGNAR_CONTRATO_FALLIDO -> {
+                if (id.equals("1")) {
+                    descripcion = "El número de contrato ya está asignado a otro usuario";
+                    logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                } else if (id.equals("2")) {
+                    descripcion = "El usuario ya tiene asignado este contrato";
+                    logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                }
+            }
+            case UPDATE_VINCULO_CONTRATO_EXITOSO -> {
+                descripcion = "Se han hecho actualizaciones al vinculo de contrato: ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case UPDATE_VINCULO_CONTRATO_FALLIDO -> {
+                switch (id) {
+                    case "1" -> {
+                        descripcion = "No se ha encontrado la vinculación del contrato con el usuario";
+                        logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                    }
+                    case "2" -> {
+                        descripcion = "El número de contrato ya pertenece a otra vinculación";
+                        logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                    }
+                    case "3" -> {
+                        descripcion = "El usuario ya tiene asignado este contrato";
+                        logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion, ip);
+                    }
+                }
             }
         }
     }

@@ -25,4 +25,5 @@ public interface UsuarioRepository extends JpaRepository<Usuario,Long> {
     // Buscar usuarios por status
     Page<Usuario> findByStatus(Status status, Pageable pageable);
 
+    List<Usuario> findByStatus(Status status);
 }

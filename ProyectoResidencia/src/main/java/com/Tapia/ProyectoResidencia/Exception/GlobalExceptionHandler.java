@@ -198,4 +198,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse(ex.getMessage(), HttpStatus.BAD_REQUEST.value()));
     }
+
+    @ExceptionHandler(UsuarioContratoCreationException.class)
+    public ResponseEntity<ApiResponse> handleUsuarioContratoCreation(UsuarioContratoCreationException ex) {
+        logger.log(Level.WARNING, "Error creando asignación de contrato: {0}", ex.getMessage());
+        HttpStatus status = ex.getStatus() != null ? ex.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+        return ResponseEntity.status(status)
+                .body(new ApiResponse(ex.getMessage(), status.value()));
+    }
 }

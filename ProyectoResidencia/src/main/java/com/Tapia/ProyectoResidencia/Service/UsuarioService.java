@@ -1,9 +1,6 @@
 package com.Tapia.ProyectoResidencia.Service;
 
-import com.Tapia.ProyectoResidencia.DTO.ChangePasswordRequest;
-import com.Tapia.ProyectoResidencia.DTO.UpdateUserEmailRequest;
-import com.Tapia.ProyectoResidencia.DTO.UpdateUserPasswordRequest;
-import com.Tapia.ProyectoResidencia.DTO.UpdateUserRequest;
+import com.Tapia.ProyectoResidencia.DTO.*;
 import com.Tapia.ProyectoResidencia.Enum.*;
 import com.Tapia.ProyectoResidencia.Exception.UserNotFoundException;
 import com.Tapia.ProyectoResidencia.Model.Usuario;
@@ -118,6 +115,13 @@ public class UsuarioService {
     public Usuario getUsuarioById(Long id) {
         return usuarioRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException("Usuario no encontrado con id: " + id));
+    }
+
+    public List<UsuarioActivo> obtenerUsuariosActivos() {
+        List<Usuario> usuariosActivos = usuarioRepository.findByStatus(Status.ACTIVO);
+        return usuariosActivos.stream()
+                .map(UsuarioActivo::fromEntity)
+                .toList();
     }
 
     public void actualizarRolUsuario(Usuario usuario, Rol rol) {

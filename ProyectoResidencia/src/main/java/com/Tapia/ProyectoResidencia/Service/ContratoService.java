@@ -1,5 +1,6 @@
 package com.Tapia.ProyectoResidencia.Service;
 
+import com.Tapia.ProyectoResidencia.DTO.ContratoActivo;
 import com.Tapia.ProyectoResidencia.DTO.ContratoCreate;
 import com.Tapia.ProyectoResidencia.Enum.Evento;
 import com.Tapia.ProyectoResidencia.Enum.Resultado;
@@ -19,6 +20,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionSystemException;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -66,6 +69,13 @@ public class ContratoService {
     public Contrato obtenerPorId(Long id) {
         return contratoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Contrato no encontrado con ID: " + id));
+    }
+
+    public List<ContratoActivo> obtenerContratosActivos() {
+        return contratoRepository.findAll()
+                .stream()
+                .map(c -> new ContratoActivo(c.getId(), c.getPuesto()))
+                .toList();
     }
 
     // Actualizar contrato existente
