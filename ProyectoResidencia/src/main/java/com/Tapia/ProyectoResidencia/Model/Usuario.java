@@ -74,4 +74,12 @@ public class Usuario {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "vocalia_id")
     private Vocalia vocalia;
+
+    @OneToMany(mappedBy = "usuario")
+    @JsonIgnore
+    private List<Zore> zores = new ArrayList<>();
+
+    @OneToMany(mappedBy = "usuario")
+    @JsonIgnore
+    private List<Are> ares = new ArrayList<>();
 }

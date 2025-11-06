@@ -3,10 +3,7 @@ package com.Tapia.ProyectoResidencia.Controller;
 import com.Tapia.ProyectoResidencia.DTO.*;
 import com.Tapia.ProyectoResidencia.Enum.Sitio;
 import com.Tapia.ProyectoResidencia.Exception.ApiResponse;
-import com.Tapia.ProyectoResidencia.Model.EmailLog;
-import com.Tapia.ProyectoResidencia.Model.LoginLog;
-import com.Tapia.ProyectoResidencia.Model.SystemLog;
-import com.Tapia.ProyectoResidencia.Model.Vocalia;
+import com.Tapia.ProyectoResidencia.Model.*;
 import com.Tapia.ProyectoResidencia.Service.*;
 import com.Tapia.ProyectoResidencia.Utils.IpUtils;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,6 +31,7 @@ public class AdminController {
     private final LoginLogService loginLogService;
     private final SystemLogService systemLogService;
     private final EmailLogService emailLogService;
+    private final MunicipioService municipioService;
 
     // Listar todas las vocalías
     @GetMapping("/vocalia")
@@ -185,5 +183,52 @@ public class AdminController {
         String ip = IpUtils.extractClientIp(httpRequest);
         userService.actualizarStatusUsuario(id, request, auth, Sitio.WEB, ip);
         return ResponseEntity.ok(new ApiResponse("Status de usuario actualizado correctamente ✅", HttpStatus.OK.value()));
+    }
+
+    // Listar todos los municipios
+    @GetMapping("/municipio")
+    public ResponseEntity<List<Municipio>> listarMunicipios() {
+        return ResponseEntity.ok(municipioService.listarTodos());
+    }
+
+    // Crear municipio
+    @PostMapping("/municipio")
+    public ResponseEntity<ApiMunicipioResponse> crearMunicipio(Authentication authentication,
+                                                      @RequestBody @Valid Municipio dto,
+                                                      HttpServletRequest httpRequest) {
+        String ip = IpUtils.extractClientIp(httpRequest);
+        Municipio municipio = municipioService.crear(authentication, dto, Sitio.WEB, ip);
+        ApiMunicipioResponse response = new ApiMunicipioResponse(
+                new ApiResponse("Municipio creado correctamente ✅", HttpStatus.OK.value()),
+                municipio
+        );
+        return ResponseEntity.ok(response);
+    }
+
+    // ✅ Actualizar municipio (permitiendo cambio de ID)
+    @PutMapping("/municipio/{idActual}")
+    public ResponseEntity<ApiMunicipioResponse> actualizarMunicipio(Authentication authentication,
+                                                                    @PathVariable("idActual") String idActual,
+                                                                    @RequestBody @Valid Municipio dto,
+                                                                    HttpServletRequest httpRequest) {
+        String ip = IpUtils.extractClientIp(httpRequest);
+        Municipio municipioActualizado = municipioService.actualizar(authentication, idActual, dto, Sitio.WEB, ip);
+
+        ApiMunicipioResponse response = new ApiMunicipioResponse(
+                new ApiResponse("Municipio actualizado correctamente ✅", HttpStatus.OK.value()),
+                municipioActualizado
+        );
+
+        return ResponseEntity.ok(response);
+    }
+
+    // Eliminar municipio
+    @DeleteMapping("/municipio/{id}")
+    public ResponseEntity<ApiResponse> eliminarMunicipio(Authentication authentication,
+                                                         @PathVariable String id,
+                                                         HttpServletRequest httpRequest) {
+        String ip = IpUtils.extractClientIp(httpRequest);
+        municipioService.eliminar(authentication, id, Sitio.WEB, ip);
+        return ResponseEntity.ok(new ApiResponse("Municipio eliminado correctamente ✅", HttpStatus.OK.value()));
     }
 }

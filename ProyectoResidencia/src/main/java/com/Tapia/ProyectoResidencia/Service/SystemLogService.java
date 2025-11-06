@@ -40,7 +40,8 @@ public class SystemLogService {
             case UPDATE_INFO_USUARIO_FALLIDO, DELETE_USUARIO_ERROR, ASIGNACION_VOCALIA_ERROR,
                  UPDATE_EMAIL_USUARIO_ERROR, UPDATE_PASSWORD_ADMIN_ERROR, UPDATE_STATUS_ADMIN_ERROR,
                  CREATE_CONTRATO_ERROR, UPDATE_CONTRATO_ERROR, DELETE_CONTRATO_ERROR, ASIGNAR_CONTRATO_ERROR,
-                 UPDATE_VINCULO_CONTRATO_ERROR->
+                 UPDATE_VINCULO_CONTRATO_ERROR, MUNICIPIO_REGISTER_FALLIDO, MUNICIPIO_UPDATE_FALLIDO,
+                 MUNICIPIO_DELETE_ERROR, MUNICIPIO_REGISTER_ERROR, MUNICIPIO_UPDATE_ERROR->
                 logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, id, ip);
             case PASSWORD_CHANGE_FALLIDO -> {
                 switch (id) {
@@ -278,11 +279,23 @@ public class SystemLogService {
                     }
                 }
             }
+            case MUNICIPIO_REGISTER_EXITOSO -> {
+                descripcion = "Municipio creado exitosamente con id: ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case MUNICIPIO_UPDATE_EXITOSO -> {
+                descripcion = "Municipio actualizado exitosamente ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case MUNICIPIO_DELETE_EXITOSO -> {
+                descripcion = "Municipio eliminado exitosamente con id: ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
         }
     }
 
     private void registrarLog(Long idUsuario, String correo, Rol rol, Sitio sitio, Evento evento, Resultado resultado, String descripcion, String ip) {
-        SystemLog  systemLog = new SystemLog();
+        SystemLog systemLog = new SystemLog();
         systemLog.setIdUsuario(idUsuario);
         systemLog.setCorreo(correo);
         systemLog.setRol(rol);
