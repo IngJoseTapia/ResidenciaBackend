@@ -1,6 +1,7 @@
 package com.Tapia.ProyectoResidencia.Controller;
 
 import com.Tapia.ProyectoResidencia.DTO.*;
+import com.Tapia.ProyectoResidencia.Enum.Rol;
 import com.Tapia.ProyectoResidencia.Enum.Sitio;
 import com.Tapia.ProyectoResidencia.Exception.ApiResponse;
 import com.Tapia.ProyectoResidencia.Model.*;
@@ -32,6 +33,10 @@ public class AdminController {
     private final SystemLogService systemLogService;
     private final EmailLogService emailLogService;
     private final MunicipioService municipioService;
+    private final ZoreService zoreService;
+    private final UsuarioService usuarioService;
+    private final AreService areService;
+    private final AsignacionZoreAreService asignacionZoreAreService;
 
     // Listar todas las vocalías
     @GetMapping("/vocalia")
@@ -230,5 +235,177 @@ public class AdminController {
         String ip = IpUtils.extractClientIp(httpRequest);
         municipioService.eliminar(authentication, id, Sitio.WEB, ip);
         return ResponseEntity.ok(new ApiResponse("Municipio eliminado correctamente ✅", HttpStatus.OK.value()));
+    }
+
+    // ✅ Listar Zores con paginación
+    @GetMapping("/zore")
+    public ResponseEntity<Page<ZoreResponse>> listarZoresPaginadas(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        int maxSize = Math.min(size, 100); // Límite de seguridad
+        Pageable pageable = PageRequest.of(page, maxSize);
+        Page<ZoreResponse> zores = zoreService.listarPaginadas(pageable);
+
+        return ResponseEntity.ok(zores);
+    }
+
+    // Crear una nueva Zore
+    @PostMapping("/zore")
+    public ResponseEntity<ApiZoreResponse> crearZore(Authentication authentication,
+                                                     @RequestBody @Valid ZoreCreate dto,
+                                                     HttpServletRequest httpRequest) {
+        String ip = IpUtils.extractClientIp(httpRequest);
+        Zore nueva = zoreService.crear(authentication, dto, Sitio.WEB, ip);
+
+        ApiZoreResponse response = new ApiZoreResponse(
+                new ApiResponse("Zore creada correctamente ✅", HttpStatus.OK.value()),
+                new ZoreResponse(nueva)
+        );
+        return ResponseEntity.ok(response);
+    }
+
+    // Actualizar una Zore existente
+    @PutMapping("/zore/{id}")
+    public ResponseEntity<ApiZoreResponse> actualizarZore(Authentication authentication,
+                                                      @PathVariable Long id,
+                                                      @RequestBody @Valid ZoreCreate dto,
+                                                      HttpServletRequest httpRequest) {
+        String ip = IpUtils.extractClientIp(httpRequest);
+        Zore actualizada = zoreService.actualizar(authentication, id, dto, Sitio.WEB, ip);
+        ApiZoreResponse response = new ApiZoreResponse(
+                new ApiResponse("Zore actualizada correctamente ✅", HttpStatus.OK.value()),
+                new ZoreResponse(actualizada)
+        );
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/usuarios/rol-se")
+    public ResponseEntity<List<UsuarioActivo>> listarUsuariosConRolSE() {
+        List<UsuarioActivo> usuariosSE = usuarioService.obtenerUsuariosPorRol(Rol.SE);
+        return ResponseEntity.ok(usuariosSE);
+    }
+
+    // ✅ Listar ARE con paginación
+    @GetMapping("/are")
+    public ResponseEntity<Page<AreResponse>> listarAresPaginadas(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        int maxSize = Math.min(size, 100);
+        Pageable pageable = PageRequest.of(page, maxSize);
+        Page<AreResponse> ares = areService.listarPaginadas(pageable);
+
+        return ResponseEntity.ok(ares);
+    }
+
+    // ✅ Crear una nueva ARE
+    @PostMapping("/are")
+    public ResponseEntity<ApiAreResponse> crearAre(Authentication authentication,
+                                                   @RequestBody @Valid AreCreate dto,
+                                                   HttpServletRequest httpRequest) {
+        String ip = IpUtils.extractClientIp(httpRequest);
+        Are nueva = areService.crear(authentication, dto, Sitio.WEB, ip);
+
+        ApiAreResponse response = new ApiAreResponse(
+                new ApiResponse("Are creada correctamente ✅", HttpStatus.OK.value()),
+                new AreResponse(nueva)
+        );
+        return ResponseEntity.ok(response);
+    }
+
+    // ✅ Actualizar una ARE existente
+    @PutMapping("/are/{id}")
+    public ResponseEntity<ApiAreResponse> actualizarAre(Authentication authentication,
+                                                        @PathVariable Long id,
+                                                        @RequestBody @Valid AreCreate dto,
+                                                        HttpServletRequest httpRequest) {
+        String ip = IpUtils.extractClientIp(httpRequest);
+        Are actualizada = areService.actualizar(authentication, id, dto, Sitio.WEB, ip);
+        ApiAreResponse response = new ApiAreResponse(
+                new ApiResponse("Are actualizada correctamente ✅", HttpStatus.OK.value()),
+                new AreResponse(actualizada)
+        );
+        return ResponseEntity.ok(response);
+    }
+
+    // ✅ Listar usuarios con rol CAE
+    @GetMapping("/usuarios/rol-cae")
+    public ResponseEntity<List<UsuarioActivo>> listarUsuariosConRolCAE() {
+        List<UsuarioActivo> usuariosCAE = usuarioService.obtenerUsuariosPorRol(Rol.CAE);
+        return ResponseEntity.ok(usuariosCAE);
+    }
+
+    // ✅ Listar todas las asignaciones (paginado)
+    @GetMapping("/asignacion-zore-are")
+    public ResponseEntity<Page<AsignacionZoreAreResponse>> listarAsignaciones(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        Pageable pageable = PageRequest.of(page, Math.min(size, 100));
+        Page<AsignacionZoreAreResponse> asignaciones = asignacionZoreAreService.listarPaginadas(pageable);
+        return ResponseEntity.ok(asignaciones);
+    }
+
+    // ✅ Crear nueva asignación ZORE–ARE
+    @PostMapping("/asignacion-zore-are")
+    public ResponseEntity<ApiAsignacionZoreAreResponse> crearAsignacion(
+            Authentication authentication,
+            @RequestBody @Valid AsignacionZoreAreCreate dto,
+            HttpServletRequest httpRequest) {
+
+        String ip = IpUtils.extractClientIp(httpRequest);
+        AsignacionZoreAre nueva = asignacionZoreAreService.crear(authentication, dto, Sitio.WEB, ip);
+
+        ApiAsignacionZoreAreResponse response = new ApiAsignacionZoreAreResponse(
+                new ApiResponse("Asignación ZORE–ARE creada correctamente ✅", HttpStatus.OK.value()),
+                new AsignacionZoreAreResponse(nueva)
+        );
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+
+    // ✅ Actualizar asignación existente
+    @PutMapping("/asignacion-zore-are/{id}")
+    public ResponseEntity<ApiAsignacionZoreAreResponse> actualizarAsignacion(
+            @PathVariable Long id,
+            Authentication authentication,
+            @RequestBody @Valid AsignacionZoreAreCreate dto,
+            HttpServletRequest httpRequest) {
+
+        String ip = IpUtils.extractClientIp(httpRequest);
+        AsignacionZoreAre actualizada = asignacionZoreAreService.actualizar(authentication, id, dto, Sitio.WEB, ip);
+
+        ApiAsignacionZoreAreResponse response = new ApiAsignacionZoreAreResponse(
+                new ApiResponse("Asignación ZORE–ARE actualizada correctamente ✅", HttpStatus.OK.value()),
+                new AsignacionZoreAreResponse(actualizada)
+        );
+
+        return ResponseEntity.ok(response);
+    }
+
+    // 🔹 Listar años disponibles en ZORE (solo un registro por año)
+    @GetMapping("/zore/anos")
+    public ResponseEntity<List<IdAnioDTO>> listarAniosZore() {
+        List<IdAnioDTO> anos = zoreService.obtenerAniosUnicos();
+        return ResponseEntity.ok(anos);
+    }
+
+    // 🔹 Listar ZORE por año seleccionado
+    @GetMapping("/zore/por-anio")
+    public ResponseEntity<List<ZoreResponse>> listarZoresPorAnio(@RequestParam String anio) {
+        List<ZoreResponse> zores = zoreService.listarPorAnio(anio);
+        return ResponseEntity.ok(zores);
+    }
+
+    // 🔹 Listar ARE disponibles por año (sin asignar)
+    // ahora acepta optional includeId para edición
+    @GetMapping("/are/por-anio")
+    public ResponseEntity<List<AreResponse>> listarAresPorAnio(
+            @RequestParam String anio,
+            @RequestParam(required = false) Long includeId) {
+
+        List<AreResponse> ares = areService.listarPorAnioSinAsignacion(anio, includeId);
+        return ResponseEntity.ok(ares);
     }
 }

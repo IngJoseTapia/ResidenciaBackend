@@ -1,5 +1,6 @@
 package com.Tapia.ProyectoResidencia.Repository;
 
+import com.Tapia.ProyectoResidencia.DTO.UsuarioActivo;
 import com.Tapia.ProyectoResidencia.Enum.Rol;
 import com.Tapia.ProyectoResidencia.Enum.Status;
 import com.Tapia.ProyectoResidencia.Model.Usuario;

@@ -124,6 +124,13 @@ public class UsuarioService {
                 .toList();
     }
 
+    public List<UsuarioActivo> obtenerUsuariosPorRol(Rol rol) {
+        List<Usuario> usuarios = usuarioRepository.findByRol(rol);
+        return usuarios.stream()
+                .map(UsuarioActivo::fromEntity)
+                .toList();
+    }
+
     public void actualizarRolUsuario(Usuario usuario, Rol rol) {
         usuario.setRol(rol);
         createUser(usuario);

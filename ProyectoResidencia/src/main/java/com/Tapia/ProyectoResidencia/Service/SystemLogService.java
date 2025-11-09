@@ -41,7 +41,11 @@ public class SystemLogService {
                  UPDATE_EMAIL_USUARIO_ERROR, UPDATE_PASSWORD_ADMIN_ERROR, UPDATE_STATUS_ADMIN_ERROR,
                  CREATE_CONTRATO_ERROR, UPDATE_CONTRATO_ERROR, DELETE_CONTRATO_ERROR, ASIGNAR_CONTRATO_ERROR,
                  UPDATE_VINCULO_CONTRATO_ERROR, MUNICIPIO_REGISTER_FALLIDO, MUNICIPIO_UPDATE_FALLIDO,
-                 MUNICIPIO_DELETE_ERROR, MUNICIPIO_REGISTER_ERROR, MUNICIPIO_UPDATE_ERROR->
+                 MUNICIPIO_DELETE_ERROR, MUNICIPIO_REGISTER_ERROR, MUNICIPIO_UPDATE_ERROR, ZORE_REGISTER_ERROR,
+                 ZORE_UPDATE_ERROR, ZORE_REGISTER_FALLIDO, ZORE_UPDATE_FALLIDO, ARE_REGISTER_FALLIDO,
+                 ARE_REGISTER_ERROR, ARE_UPDATE_FALLIDO, ARE_UPDATE_ERROR, ASIGNACION_ZORE_ARE_REGISTRO_ERROR,
+                 ASIGNACION_ZORE_ARE_REGISTRO_FALLIDO, ASIGNACION_ZORE_ARE_UPDATE_FALLIDO,
+                 ASIGNACION_ZORE_ARE_UPDATE_ERROR ->
                 logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, id, ip);
             case PASSWORD_CHANGE_FALLIDO -> {
                 switch (id) {
@@ -289,6 +293,30 @@ public class SystemLogService {
             }
             case MUNICIPIO_DELETE_EXITOSO -> {
                 descripcion = "Municipio eliminado exitosamente con id: ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case ZORE_REGISTER_EXITOSO -> {
+                descripcion = "Zore creada correctamente con número ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case ZORE_UPDATE_EXITOSO -> {
+                descripcion = "Zore actualizada correctamente con número ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case ARE_REGISTER_EXITOSO -> {
+                descripcion = "Are creada correctamente con número ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case ARE_UPDATE_EXITOSO -> {
+                descripcion = "Are actualizada correctamente con número ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case ASIGNACION_ZORE_ARE_REGISTRO_EXITOSO -> {
+                descripcion = "Asignación creada correctamente ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case ASIGNACION_ZORE_ARE_UPDATE_EXITOSA -> {
+                descripcion = "Asignación actualizada correctamente ";
                 registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
             }
         }
