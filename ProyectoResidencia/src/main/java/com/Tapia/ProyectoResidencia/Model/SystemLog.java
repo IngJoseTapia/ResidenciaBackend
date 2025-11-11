@@ -38,6 +38,7 @@ public class SystemLog {
     @Enumerated(EnumType.STRING)
     private Resultado resultado;
 
+    @Column(columnDefinition = "TEXT")
     private String descripcion; // Información adicional sobre la acción
 
     private String ip; // IP desde donde se realizó la acción (opcional)

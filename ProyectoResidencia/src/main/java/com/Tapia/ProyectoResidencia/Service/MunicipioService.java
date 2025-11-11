@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -120,6 +121,10 @@ public class MunicipioService {
             manejarExcepcionBD(usuario, sitio, ip, eventoError, "Error inesperado al eliminar municipio: " + e.getMessage());
             throw e;
         }
+    }
+
+    public Optional<Municipio> obtenerPorId(String id) {
+        return municipioRepository.findById(id);
     }
 
     // ✅ Prepara y valida un municipio para crear o actualizar

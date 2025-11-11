@@ -1,8 +1,11 @@
 package com.Tapia.ProyectoResidencia.Model;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.Data;
+
+import java.util.List;
 
 @Entity
 @Table(name = "municipios")
@@ -17,5 +20,10 @@ public class Municipio {
     @NotBlank
     @Size(max = 100)
     private String nombre;
+
+    // Relación bidireccional (opcional)
+    @OneToMany(mappedBy = "municipio")
+    @JsonManagedReference
+    private List<Localidad> localidades;
 }
 

@@ -37,6 +37,7 @@ public class AdminController {
     private final UsuarioService usuarioService;
     private final AreService areService;
     private final AsignacionZoreAreService asignacionZoreAreService;
+    private final LocalidadService localidadService;
 
     // Listar todas las vocalías
     @GetMapping("/vocalia")
@@ -408,4 +409,70 @@ public class AdminController {
         List<AreResponse> ares = areService.listarPorAnioSinAsignacion(anio, includeId);
         return ResponseEntity.ok(ares);
     }
+
+    // ✅ Listar todas las localidades
+    @GetMapping("/localidad")
+    public ResponseEntity<List<Localidad>> listarLocalidades() {
+        return ResponseEntity.ok(localidadService.listarTodas());
+    }
+
+    // ✅ Crear nueva localidad
+    @PostMapping("/localidad")
+    public ResponseEntity<ApiLocalidadResponse> crearLocalidad(
+            Authentication authentication,
+            @RequestBody @Valid LocalidadCreate dto,
+            HttpServletRequest httpRequest) {
+
+        String ip = IpUtils.extractClientIp(httpRequest);
+        Localidad nueva = localidadService.crear(authentication, dto, Sitio.WEB, ip);
+
+        ApiLocalidadResponse response = new ApiLocalidadResponse(
+                new ApiResponse("Localidad creada correctamente ✅", HttpStatus.OK.value()),
+                new LocalidadResponse(nueva)
+        );
+        return ResponseEntity.ok(response);
+    }
+
+    // ✅ Actualizar localidad existente
+    @PutMapping("/localidad/{id}")
+    public ResponseEntity<ApiLocalidadResponse> actualizarLocalidad(
+            Authentication authentication,
+            @PathVariable Long id,
+            @RequestBody @Valid LocalidadCreate dto,
+            HttpServletRequest httpRequest) {
+
+        String ip = IpUtils.extractClientIp(httpRequest);
+        Localidad actualizada = localidadService.actualizar(authentication, id, dto, Sitio.WEB, ip);
+
+        ApiLocalidadResponse response = new ApiLocalidadResponse(
+                new ApiResponse("Localidad actualizada correctamente ✅", HttpStatus.OK.value()),
+                new LocalidadResponse(actualizada)
+        );
+
+        return ResponseEntity.ok(response);
+    }
+
+    // ✅ Eliminar localidad
+    @DeleteMapping("/localidad/{id}")
+    public ResponseEntity<ApiResponse> eliminarLocalidad(Authentication authentication,
+                                                         @PathVariable Long id,
+                                                         HttpServletRequest httpRequest) {
+        String ip = IpUtils.extractClientIp(httpRequest);
+        localidadService.eliminar(authentication, id, Sitio.WEB, ip);
+        return ResponseEntity.ok(new ApiResponse("Localidad eliminada correctamente ✅", HttpStatus.OK.value()));
+    }
+
+    // ✅ Listar localidades con paginación
+    @GetMapping("/localidad/paginadas")
+    public ResponseEntity<Page<LocalidadResponse>> listarLocalidadesPaginadas(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        int maxSize = Math.min(size, 100);
+        Pageable pageable = PageRequest.of(page, maxSize);
+        Page<LocalidadResponse> localidades = localidadService.listarPaginadas(pageable);
+
+        return ResponseEntity.ok(localidades);
+    }
+
 }
