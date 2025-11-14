@@ -41,6 +41,13 @@ public class LocalidadService {
                 .map(LocalidadResponse::new);
     }
 
+    public List<LocalidadResponse> listarPorMunicipio(String municipioId) {
+        List<Localidad> localidades = localidadRepository.findByMunicipio_Id(municipioId);
+        return localidades.stream()
+                .map(LocalidadResponse::new)
+                .toList();
+    }
+
     // ✅ Crear localidad
     @Transactional
     public Localidad crear(Authentication authentication, LocalidadCreate dto, Sitio sitio, String ip) {

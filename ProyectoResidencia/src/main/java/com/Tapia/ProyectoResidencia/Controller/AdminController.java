@@ -38,6 +38,7 @@ public class AdminController {
     private final AreService areService;
     private final AsignacionZoreAreService asignacionZoreAreService;
     private final LocalidadService localidadService;
+    private final SeccionService seccionService;
 
     // Listar todas las vocalías
     @GetMapping("/vocalia")
@@ -410,6 +411,13 @@ public class AdminController {
         return ResponseEntity.ok(ares);
     }
 
+    //Consultar asignaciones de Zore - Are por año
+    @GetMapping("/asignacion-zore-are/simple-por-anio")
+    public ResponseEntity<List<AsignacionZoreAreSimple>> listarAsignacionesSimplePorAnio(@RequestParam String anio) {
+        List<AsignacionZoreAreSimple> asignaciones = asignacionZoreAreService.listarPorAnioSimple(anio);
+        return ResponseEntity.ok(asignaciones);
+    }
+
     // ✅ Listar todas las localidades
     @GetMapping("/localidad")
     public ResponseEntity<List<Localidad>> listarLocalidades() {
@@ -473,6 +481,70 @@ public class AdminController {
         Page<LocalidadResponse> localidades = localidadService.listarPaginadas(pageable);
 
         return ResponseEntity.ok(localidades);
+    }
+
+    // 🔹 Listar localidades por ID de municipio
+    @GetMapping("/localidad/por-municipio/{municipioId}")
+    public ResponseEntity<List<LocalidadResponse>> listarLocalidadesPorMunicipio(@PathVariable String municipioId) {
+        List<LocalidadResponse> localidades = localidadService.listarPorMunicipio(municipioId);
+        return ResponseEntity.ok(localidades);
+    }
+
+    // ✅ Listar secciones con paginación
+    @GetMapping("/seccion/paginadas")
+    public ResponseEntity<Page<SeccionResponse>> listarSeccionesPaginadas(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        int maxSize = Math.min(size, 100);
+        Pageable pageable = PageRequest.of(page, maxSize);
+        Page<SeccionResponse> secciones = seccionService.listarPaginadas(pageable);
+
+        return ResponseEntity.ok(secciones);
+    }
+
+    // ✅ Listar todas las secciones
+    @GetMapping("/seccion")
+    public ResponseEntity<List<SeccionResponse>> listarTodasLasSecciones() {
+        List<SeccionResponse> secciones = seccionService.listarTodas();
+        return ResponseEntity.ok(secciones);
+    }
+
+    // ✅ Crear nueva sección
+    @PostMapping("/seccion")
+    public ResponseEntity<ApiSeccionResponse> crearSeccion(
+            Authentication authentication,
+            @RequestBody @Valid SeccionCreate dto,
+            HttpServletRequest httpRequest) {
+
+        String ip = IpUtils.extractClientIp(httpRequest);
+        Seccion nueva = seccionService.crear(authentication, dto, Sitio.WEB, ip);
+
+        ApiSeccionResponse response = new ApiSeccionResponse(
+                new ApiResponse("Sección creada correctamente ✅", HttpStatus.OK.value()),
+                new SeccionResponse(nueva)
+        );
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    // ✅ Actualizar sección existente
+    @PutMapping("/seccion/{id}")
+    public ResponseEntity<ApiSeccionResponse> actualizarSeccion(
+            Authentication authentication,
+            @PathVariable Long id,
+            @RequestBody @Valid SeccionCreate dto,
+            HttpServletRequest httpRequest) {
+
+        String ip = IpUtils.extractClientIp(httpRequest);
+        Seccion actualizada = seccionService.actualizar(authentication, id, dto, Sitio.WEB, ip);
+
+        ApiSeccionResponse response = new ApiSeccionResponse(
+                new ApiResponse("Sección actualizada correctamente ✅", HttpStatus.OK.value()),
+                new SeccionResponse(actualizada)
+        );
+
+        return ResponseEntity.ok(response);
     }
 
 }

@@ -46,7 +46,8 @@ public class SystemLogService {
                  ARE_REGISTER_ERROR, ARE_UPDATE_FALLIDO, ARE_UPDATE_ERROR, ASIGNACION_ZORE_ARE_REGISTRO_ERROR,
                  ASIGNACION_ZORE_ARE_REGISTRO_FALLIDO, ASIGNACION_ZORE_ARE_UPDATE_FALLIDO,
                  ASIGNACION_ZORE_ARE_UPDATE_ERROR, LOCALIDAD_REGISTER_FALLIDO, LOCALIDAD_REGISTER_ERROR,
-                 LOCALIDAD_UPDATE_FALLIDO, LOCALIDAD_UPDATE_ERROR, LOCALIDAD_DELETE_ERROR ->
+                 LOCALIDAD_UPDATE_FALLIDO, LOCALIDAD_UPDATE_ERROR, LOCALIDAD_DELETE_ERROR, SECCION_REGISTER_FALLIDO,
+                 SECCION_REGISTER_ERROR, SECCION_UPDATE_FALLIDO, SECCION_UPDATE_ERROR ->
                 logTransactionalService.registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, id, ip);
             case PASSWORD_CHANGE_FALLIDO -> {
                 switch (id) {
@@ -330,6 +331,14 @@ public class SystemLogService {
             }
             case LOCALIDAD_DELETE_EXITOSO -> {
                 descripcion = "Localidad eliminada correctamente ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case SECCION_REGISTER_EXITOSO -> {
+                descripcion = "Sección creada correctamente ";
+                registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
+            }
+            case SECCION_UPDATE_EXITOSO -> {
+                descripcion = "Sección actualizada correctamente ";
                 registrarLog(usuario.getId(), usuario.getCorreo(), usuario.getRol(), sitio, evento, resultado, descripcion + id, ip);
             }
         }

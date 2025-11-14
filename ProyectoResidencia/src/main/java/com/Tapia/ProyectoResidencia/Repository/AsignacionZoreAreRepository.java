@@ -4,6 +4,7 @@ import com.Tapia.ProyectoResidencia.Model.AsignacionZoreAre;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -18,4 +19,6 @@ public interface AsignacionZoreAreRepository extends JpaRepository<AsignacionZor
     boolean existsByAreIdAndAnio(Long areId, String anio);
 
     boolean existsByZoreIdAndAreIdAndIdNot(Long zoreId, Long areId, Long id);
+
+    List<AsignacionZoreAre> findByAnio(String anio);
 }

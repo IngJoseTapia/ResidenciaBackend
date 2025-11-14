@@ -2,6 +2,7 @@ package com.Tapia.ProyectoResidencia.Service;
 
 import com.Tapia.ProyectoResidencia.DTO.AsignacionZoreAreCreate;
 import com.Tapia.ProyectoResidencia.DTO.AsignacionZoreAreResponse;
+import com.Tapia.ProyectoResidencia.DTO.AsignacionZoreAreSimple;
 import com.Tapia.ProyectoResidencia.Enum.*;
 import com.Tapia.ProyectoResidencia.Model.*;
 import com.Tapia.ProyectoResidencia.Repository.*;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionSystemException;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.NoSuchElementException;
 
 @Service
@@ -33,6 +35,27 @@ public class AsignacionZoreAreService {
     public Page<AsignacionZoreAreResponse> listarPaginadas(Pageable pageable) {
         Page<AsignacionZoreAre> asignaciones = asignacionRepository.findAll(pageable);
         return asignaciones.map(AsignacionZoreAreResponse::new);
+    }
+
+    public List<AsignacionZoreAreSimple> listarPorAnioSimple(String anio) {
+        return asignacionRepository.findByAnio(anio)
+                .stream()
+                .map(asignacion -> new AsignacionZoreAreSimple(
+                        asignacion.getId(),
+                        asignacion.getZore().getNumeracion(),
+                        asignacion.getAre().getNumeracion(),
+                        asignacion.getZore().getUsuario() != null
+                                ? asignacion.getZore().getUsuario().getNombre() + " " +
+                                asignacion.getZore().getUsuario().getApellidoPaterno() + " " +
+                                asignacion.getZore().getUsuario().getApellidoMaterno()
+                                : "—",
+                        asignacion.getAre().getUsuario() != null
+                                ? asignacion.getAre().getUsuario().getNombre() + " " +
+                                asignacion.getAre().getUsuario().getApellidoPaterno() + " " +
+                                asignacion.getAre().getUsuario().getApellidoMaterno()
+                                : "—"
+                ))
+                .toList();
     }
 
     // 🔹 Crear asignación
